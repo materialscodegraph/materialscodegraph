@@ -5,7 +5,7 @@ Thank you for considering contributing to MCG-lite! This document provides guide
 ## 🚀 Quick Start for Contributors
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/your-username/materialscodegraph-lite.git`
+2. **Clone** your fork: `git clone https://github.com/your-username/materialscodegraph.git`
 3. **Create** a virtual environment: `python -m venv mcg-dev`
 4. **Install** in development mode: `pip install -e .`
 5. **Run tests** to ensure everything works: `python run_tests.py`

@@ -21,12 +21,12 @@ setup(
     description="Minimal MCP implementation for materials science workflows with full lineage tracking",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/your-org/materialscodegraph-lite",
+    url="https://github.com/materialscodegraph/materialscodegraph",
     project_urls={
-        "Bug Reports": "https://github.com/your-org/materialscodegraph-lite/issues",
-        "Documentation": "https://github.com/your-org/materialscodegraph-lite/wiki",
-        "Source": "https://github.com/your-org/materialscodegraph-lite",
-        "Discussions": "https://github.com/your-org/materialscodegraph-lite/discussions",
+        "Bug Reports": "https://github.com/materialscodegraph/materialscodegraph/issues",
+        "Documentation": "https://github.com/materialscodegraph/materialscodegraph/wiki",
+        "Source": "https://github.com/materialscodegraph/materialscodegraph",
+        "Discussions": "https://github.com/materialscodegraph/materialscodegraph/discussions",
     },
     packages=find_packages(),
     classifiers=[

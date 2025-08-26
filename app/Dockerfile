@@ -54,6 +54,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 CMD ["python", "-m", "memory_mcp.server"]
 
 # Metadata
-LABEL org.opencontainers.image.source="https://github.com/your-org/materialscodegraph-lite"
+LABEL org.opencontainers.image.source="https://github.com/materialscodegraph/materialscodegraph"
 LABEL org.opencontainers.image.description="MaterialsCodeGraph-lite: Minimal MCP implementation for materials science"
 LABEL org.opencontainers.image.licenses="MIT"

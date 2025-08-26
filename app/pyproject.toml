@@ -58,11 +58,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/materialscodegraph-lite"
-Documentation = "https://github.com/your-org/materialscodegraph-lite/wiki"
-Repository = "https://github.com/your-org/materialscodegraph-lite"
-"Bug Reports" = "https://github.com/your-org/materialscodegraph-lite/issues"
-Discussions = "https://github.com/your-org/materialscodegraph-lite/discussions"
+Homepage = "https://github.com/materialscodegraph/materialscodegraph"
+Documentation = "https://github.com/materialscodegraph/materialscodegraph/wiki"
+Repository = "https://github.com/materialscodegraph/materialscodegraph"
+"Bug Reports" = "https://github.com/materialscodegraph/materialscodegraph/issues"
+Discussions = "https://github.com/materialscodegraph/materialscodegraph/discussions"
 
 [project.scripts]
 mcg = "cli.mcg:main"
