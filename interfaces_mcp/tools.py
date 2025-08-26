@@ -3,8 +3,8 @@ import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from app.common.schema import Asset, Edge
-from app.common.ids import asset_id, generate_id
+from common.schema import Asset, Edge
+from common.ids import asset_id, generate_id
 
 class InterfacesTools:
     """Tools for planning and explaining computational workflows"""

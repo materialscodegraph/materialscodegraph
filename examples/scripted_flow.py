@@ -7,11 +7,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import json
 from datetime import datetime
-from app.common.schema import Asset, Edge, Run
-from app.common.ids import asset_id, run_id, generate_id
-from app.interfaces_mcp.tools import InterfacesTools
-from app.compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
-from app.memory_mcp.store import MemoryStore
+from common.schema import Asset, Edge, Run
+from common.ids import asset_id, run_id, generate_id
+from interfaces_mcp.tools import InterfacesTools
+from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
+from memory_mcp.store import MemoryStore
 
 def main():
     """Execute the silicon thermal conductivity workflow"""

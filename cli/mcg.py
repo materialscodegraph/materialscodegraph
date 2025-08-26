@@ -74,7 +74,7 @@ class MCGClient:
 class InterfacesMCP:
     def plan(self, task: str) -> Dict[str, Any]:
         """Mock plan generation"""
-        from app.interfaces_mcp.tools import InterfacesTools
+        from interfaces_mcp.tools import InterfacesTools
         tools = InterfacesTools()
         plan = tools.plan(task)
         
@@ -85,8 +85,8 @@ class InterfacesMCP:
     
     def explain(self, results_assets, ledger_slice) -> str:
         """Mock explanation generation"""
-        from app.interfaces_mcp.tools import InterfacesTools
-        from app.common.schema import Asset, Edge
+        from interfaces_mcp.tools import InterfacesTools
+        from common.schema import Asset, Edge
         
         tools = InterfacesTools()
         
@@ -99,7 +99,7 @@ class InterfacesMCP:
 class ComputeMCP:
     def start(self, runner_kind: str, asset_ids: list, params: dict) -> Dict[str, Any]:
         """Mock compute start"""
-        from app.common.ids import run_id
+        from common.ids import run_id
         
         run = {
             "id": run_id(),
@@ -131,8 +131,8 @@ class ComputeMCP:
     def results(self, run_id: str) -> Dict[str, Any]:
         """Mock results retrieval"""
         # Return simulated results for demonstration
-        from app.common.schema import Asset
-        from app.common.ids import asset_id
+        from common.schema import Asset
+        from common.ids import asset_id
         
         # Check if this was a kALDo run based on run characteristics
         # In reality would check stored run metadata
@@ -193,12 +193,12 @@ class ComputeMCP:
 class MemoryMCP:
     def __init__(self):
         # Use in-memory store for demonstration
-        from app.memory_mcp.store import MemoryStore
+        from memory_mcp.store import MemoryStore
         self.store = MemoryStore()
     
     def put_assets(self, assets) -> list:
         """Store assets"""
-        from app.common.schema import Asset
+        from common.schema import Asset
         
         ids = []
         for asset_dict in assets:
@@ -209,7 +209,7 @@ class MemoryMCP:
     
     def link(self, edges) -> int:
         """Store edges"""
-        from app.common.schema import Edge
+        from common.schema import Edge
         
         edge_objs = [Edge.from_dict(e) for e in edges]
         return self.store.append_edges(edge_objs)

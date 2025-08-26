@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.common.ids import generate_id, hash_dict, asset_id, run_id
+from common.ids import generate_id, hash_dict, asset_id, run_id
 
 class TestIDGeneration:
     """Test ID generation functions"""

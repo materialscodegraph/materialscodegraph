@@ -7,8 +7,8 @@ from mcp import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from app.common.schema import Asset, Edge
-from app.interfaces_mcp.tools import InterfacesTools
+from common.schema import Asset, Edge
+from interfaces_mcp.tools import InterfacesTools
 
 # Create MCP server
 app = Server("interfaces-mcp")

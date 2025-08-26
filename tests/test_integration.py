@@ -3,10 +3,10 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.common.schema import Asset, Edge, Run
-from app.common.ids import generate_id, run_id
-from app.interfaces_mcp.tools import InterfacesTools
-from app.memory_mcp.store import MemoryStore
+from common.schema import Asset, Edge, Run
+from common.ids import generate_id, run_id
+from interfaces_mcp.tools import InterfacesTools
+from memory_mcp.store import MemoryStore
 
 def test_silicon_workflow():
     """Test the silicon thermal conductivity workflow"""

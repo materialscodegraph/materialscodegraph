@@ -8,9 +8,9 @@ from mcp import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from app.common.schema import Asset, Edge
-from app.common.ids import asset_id
-from app.memory_mcp.store import MemoryStore
+from common.schema import Asset, Edge
+from common.ids import asset_id
+from memory_mcp.store import MemoryStore
 
 # Initialize store with persistence
 STORE_PATH = Path.home() / ".mcg" / "memory" / "store.json"

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.common.schema import Asset, Run, Edge, validate_system, validate_method, validate_asset
+from common.schema import Asset, Run, Edge, validate_system, validate_method, validate_asset
 
 class TestAsset:
     """Test Asset dataclass and validation"""

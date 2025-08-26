@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.common.schema import Asset, Edge
-from app.memory_mcp.store import MemoryStore
+from common.schema import Asset, Edge
+from memory_mcp.store import MemoryStore
 
 class TestMemoryStore:
     """Test MemoryStore functionality"""

@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 
-from app.common.schema import Asset, Edge
+from common.schema import Asset, Edge
 
 class MemoryStore:
     """In-memory store with optional persistence"""

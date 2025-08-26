@@ -1,144 +1,459 @@
-# MaterialsCodeGraph - Project Overview
+# MaterialsCodeGraph
 
-## Project Vision
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#testing)
 
-MaterialsCodeGraph is an AI-powered simulation platform designed to democratize advanced materials research by removing friction between atomistic simulations and device-level performance modeling. The platform bridges the gap from atoms to answers, placing sophisticated multiphysics capabilities in the hands of every scientist and engineer designing matter at the nanoscale.
+> A minimal, production-ready implementation of MaterialsCodeGraph using Model Context Protocols (MCPs) for computational materials science workflows with full lineage tracking.
 
-## Core Problem Statement
+## Table of Contents
 
-Modern materials research faces significant fragmentation:
+- [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [User Guide](#user-guide)
+- [API Documentation](#api-documentation)
+- [Examples](#examples)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
 
-- **Format Incompatibility**: Researchers waste valuable time scripting conversions between Materials Project, VASP, LAMMPS, and Quantum ESPRESSO formats
-- **Missing Parameters**: Incomplete inputs require expert knowledge, creating barriers for new researchers
-- **Compute Friction**: Provisioning clusters, managing queues, and tracking jobs slows rapid iteration
-- **Lost Provenance**: Regulatory and commercial stakeholders demand auditable chains of custody that manual tracking cannot provide
+## Overview
 
-## Solution Architecture
+MaterialsCodeGraph (MCG) enables **natural language driven computational workflows** for materials science. Simply describe what you want to calculate in plain English, and MCG handles the rest - from fetching crystal structures to running simulations to explaining results.
 
-### Agent-Oriented Platform
-MaterialsCodeGraph employs an interactive scientific copilot that:
-- Inspects inputs and detects omissions
-- Queries users for missing parameters
-- Provides domain knowledge at users' fingertips
-- Automates workflow orchestration
+```bash
+# Example: One command to get thermal conductivity
+mcg plan "Calculate thermal conductivity for silicon using LAMMPS at 300-800K"
+```
 
-### Core Platform Capabilities
+### Why MaterialsCodeGraph?
 
-1. **File Translation Engine**
-   - Schema-aware conversion between major simulation toolchains
-   - Physical fidelity guaranteed across format translations
-   - Supports Materials Project, LAMMPS, Quantum ESPRESSO, GPUMD
+- **🗣️ Natural Language Interface**: No need to learn complex APIs or simulation inputs
+- **🔄 Multiple Methods**: Compare LAMMPS MD with kALDo BTE in the same framework
+- **📊 Full Provenance**: Every calculation step is tracked for reproducibility
+- **🚀 Production Ready**: Docker support, comprehensive testing, extensible architecture
 
-2. **Interactive Scientific Copilot**
-   - Context-driven agent with materials science domain knowledge
-   - Natural language interface for complex simulation setup
-   - Automated parameter validation and suggestion
+## Features
 
-3. **Scalable Cloud Compute**
-   - Launch DFT or molecular dynamics without cluster provisioning
-   - GPU nodes and spot instances orchestrated transparently
-   - Cloud-native architecture with containerized environments
+- **Natural Language Planning** - Parse tasks like "Calculate κ for mp-149 silicon"
+- **Multi-Method Support** - LAMMPS Green-Kubo and kALDo BTE calculations
+- **Materials Project Integration** - Automatic structure fetching by material ID
+- **Complete Lineage Tracking** - Immutable provenance with content-based hashing
+- **Rich Analysis** - Thermal conductivity tensors, phonon properties, trend analysis
+- **Extensible Architecture** - Easy to add VASP, Quantum ESPRESSO, or other codes
 
-4. **Provenance Ledger**
-   - Complete audit trails of inputs, outputs, and scripts
-   - Cryptographic tracking with metadata links
-   - Satisfies compliance while enabling controlled data sharing
+## Quick Start
 
-## Technical Implementation
+### Prerequisites
 
-### Multiphysics Modules
+- Python 3.8 or higher
+- Materials Project API key ([get one free](https://materialsproject.org/api))
 
-#### Anharmonic Lattice Dynamics
-- Compute force constants, phonon dispersions, Kapitsa resistances
-- Thermal conductivity calculations for transistor interconnect stacks
-- GPU-accelerated with sparse tensor optimization
-- Built on kALDo lineage with performance improvements
+### Installation
 
-#### Defect & Dopant Workflows
-- Generate supercells and introduce point/extended defects
-- Automated geometry relaxation with formation energy tracking
-- Essential for semiconductor device design and optimization
+```bash
+# Clone the repository
+git clone https://github.com/materialscodegraph/materialscodegraph.git
+cd materialscodegraph
 
-#### Electrochemical Simulation
-- Interfaces to implicit-solvent and grand-canonical ensembles
-- Battery research focus: lithiation dynamics and interface chemistry
-- Multiscale modeling capabilities for ionic transport
+# Install dependencies
+pip install -r requirements.txt
 
-### Technology Stack
+# Set your Materials Project API key
+export MP_API_KEY="your_api_key_here"
+```
 
-#### Open-Source Core
-- Fundamental libraries released under permissive licenses
-- Community extension and third-party plugin architecture
-- Enterprise features available for commercial applications
+### Your First Calculation
 
-#### Context-Rich Message Schema
-- Simulation intent, physical units, uncertainty estimates
-- Lineage pointers for complete traceability
-- Natural language negotiation maps to deterministic JSON
+Calculate thermal conductivity of silicon in 3 steps:
 
-#### Infrastructure
-- Containerized environments with spot instance optimization
-- GPU acceleration for computationally intensive workflows
-- Schema-aware conversion ensuring physical fidelity
+```bash
+# 1. Plan the calculation using natural language
+python -m cli.mcg plan "Calculate thermal conductivity for mp-149 silicon at 300-800K using LAMMPS"
 
-## Target Applications
+# 2. Execute the workflow
+python -m cli.mcg start --plan plan.json
 
-### Advanced Logic
-- Next-generation processors requiring precise thermal management
-- Heat dissipation modeling for 3nm nodes and beyond
-- Performance optimization for cutting-edge semiconductor designs
+# 3. View results
+python -m cli.mcg results R12345678
+```
 
-### Wide-Bandgap Power Electronics
-- SiC and GaN devices operating at extreme conditions
-- Thermal cycling reliability and interface degradation prediction
-- Critical for high-power, high-frequency applications
+Output:
+```
+Thermal Conductivity κ(T):
+Temperature [K]  |  κ [W/(m·K)]
+--------------------------------
+     300        |   148.50
+     400        |    95.20
+     500        |    68.10
+     600        |    51.30
+     700        |    40.20
+     800        |    32.50
+```
 
-### Solid-State Batteries
-- Lithium metal anodes and ceramic electrolytes
-- Multiscale modeling of ionic transport and mechanical stress
-- Essential for next-generation energy storage solutions
+## Installation
 
-### Aerospace Thermal Protection
-- Ultra-high temperature ceramics and refractory composites
-- Atomic-level understanding of heat conduction mechanisms
-- Critical for hypersonic vehicle design
+### Option 1: Standard Installation
 
-## Getting Started
+```bash
+git clone https://github.com/materialscodegraph/materialscodegraph.git
+cd materialscodegraph
+pip install -e .
+```
 
-### For Researchers
-1. Join the early access program via contact form
-2. Provide research area and simulation needs
-3. Receive alpha platform access with priority support
-4. Direct feedback channel to development team
+### Option 2: Docker Installation
 
-### For Developers
-1. Explore open-source core libraries
-2. Review plugin architecture documentation
-3. Contribute to community extensions
-4. Join developer community discussions
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
 
-## Contact and Community
+# Or build manually
+docker build -t mcg:latest .
+docker run -e MP_API_KEY=$MP_API_KEY mcg:latest
+```
 
-**Email**: bleep.agility-5v@icloud.com
+### Option 3: Development Installation
 
-## Technical Notes for Development
+```bash
+# Clone and create virtual environment
+git clone https://github.com/materialscodegraph/materialscodegraph.git
+cd materialscodegraph
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### Architecture Decisions
-- Single-page application for streamlined user experience
-- Dark theme optimized for scientific visualization
-- Responsive design with mobile-first approach
-- Scientific imagery integration for enhanced communication
+# Install in development mode with extras
+pip install -e ".[dev]"
 
-### Design System
-- **Typography**: Poppins (bold, headings) + Inter (light, body text)
-- **Color Scheme**: Dark background (#000000) with cyan/blue accents
-- **Components**: Minimal design with transparent backgrounds
-- **Imagery**: Scientific visualizations with brightness/contrast optimization
+# Run tests to verify installation
+python run_tests.py
+```
 
-### Development Stack
-- Static site deployment via Cloudflare Workers
-- Pure CSS with custom properties for theming
-- Scientific image assets optimized for web delivery
-- Smooth scrolling navigation with client-side routing
+## User Guide
 
-This project represents the convergence of materials science, artificial intelligence, and cloud computing to create a platform that can accelerate scientific discovery and technological innovation in the materials space.
+### Basic Usage
+
+MCG uses a simple command-line interface with five main commands:
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `plan` | Create workflow from natural language | `python -m cli.mcg plan "Calculate κ for silicon"` |
+| `start` | Execute a workflow plan | `python -m cli.mcg start --plan plan.json` |
+| `status` | Check calculation progress | `python -m cli.mcg status R12345678` |
+| `results` | Retrieve calculation results | `python -m cli.mcg results R12345678` |
+| `explain` | Get human-readable explanation | `python -m cli.mcg explain R12345678` |
+
+### Natural Language Examples
+
+MCG understands various ways to describe calculations:
+
+```bash
+# Basic thermal conductivity
+python -m cli.mcg plan "Calculate thermal conductivity for silicon"
+
+# Specify temperature range
+python -m cli.mcg plan "Get κ for mp-149 from 300K to 800K"
+
+# Choose specific method
+python -m cli.mcg plan "Use LAMMPS Green-Kubo for silicon thermal conductivity at 300-800K"
+
+# Use Boltzmann Transport Equation
+python -m cli.mcg plan "Calculate κ using kALDo BTE for silicon with 25x25x25 mesh"
+
+# Compare methods
+python -m cli.mcg plan "Compare LAMMPS and kALDo thermal conductivity for silicon"
+```
+
+### Understanding Results
+
+Results include detailed thermal transport properties:
+
+```python
+# LAMMPS Green-Kubo Results
+{
+  "T_K": [300, 400, 500, 600, 700, 800],
+  "kappa_W_per_mK": [148.5, 95.2, 68.1, 51.3, 40.2, 32.5],
+  "method": "Green-Kubo",
+  "supercell": [20, 20, 20]
+}
+
+# kALDo BTE Results (includes tensor & phonons)
+{
+  "T_K": [300, 400, 500],
+  "kappa_W_per_mK": [200.0, 137.6, 102.9],
+  "kappa_xx_W_per_mK": [204.0, 140.3, 105.0],
+  "kappa_yy_W_per_mK": [196.0, 134.8, 100.8],
+  "kappa_zz_W_per_mK": [200.0, 137.6, 102.9],
+  "phonon_freq_THz": [2.1, 4.5, 7.8, 12.3, 14.6],
+  "lifetimes_ps": [47.6, 22.2, 12.8, 8.1, 6.8],
+  "method": "BTE",
+  "solver": "kALDo"
+}
+```
+
+## API Documentation
+
+### Python API
+
+```python
+from interfaces_mcp.tools import InterfacesTools
+from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
+from memory_mcp.store import MemoryStore
+
+# Initialize components
+interfaces = InterfacesTools()
+memory = MemoryStore()
+
+# Plan a calculation
+task = "Calculate thermal conductivity for silicon at 300K"
+plan = interfaces.plan(task)
+
+# Run simulation
+runner = LAMMPSKappaGKRunner()
+results = runner.run(run_obj, assets, params)
+
+# Store with lineage
+memory.put_asset(results_asset)
+memory.append_edge(lineage_edge)
+```
+
+### MCP Tool Interfaces
+
+#### Interfaces MCP
+- `plan(nl_task: str)` - Convert natural language to execution plan
+- `explain(results: List[Asset], ledger: List[Edge])` - Generate human explanation
+
+#### Compute MCP
+- `start(runner_kind: str, assets: List, params: Dict)` - Start calculation
+- `status(run_id: str)` - Check calculation status
+- `results(run_id: str)` - Retrieve results and lineage
+
+#### Memory MCP
+- `put_assets(assets: List[Asset])` - Store computational assets
+- `get_assets(ids: List[str])` - Retrieve assets by ID
+- `link(edges: List[Edge])` - Record lineage relationships
+- `ledger(select: Dict)` - Query provenance graph
+
+## Examples
+
+### Example 1: Silicon Thermal Conductivity (LAMMPS)
+
+```python
+#!/usr/bin/env python3
+"""Calculate silicon thermal conductivity using LAMMPS Green-Kubo"""
+
+from cli.mcg import MCGClient
+
+client = MCGClient()
+
+# Plan the calculation
+plan = client.plan("Calculate thermal conductivity for mp-149 silicon at 300-800K using LAMMPS")
+
+# Execute
+run_id = client.start(plan)
+print(f"Started calculation: {run_id}")
+
+# Get results
+results = client.results(run_id)
+for T, k in zip(results["T_K"], results["kappa_W_per_mK"]):
+    print(f"{T}K: {k:.2f} W/(m·K)")
+```
+
+### Example 2: Phonon Analysis with kALDo
+
+```python
+#!/usr/bin/env python3
+"""Analyze phonon transport using kALDo BTE"""
+
+from cli.mcg import MCGClient
+
+client = MCGClient()
+
+# Use BTE for detailed phonon analysis
+plan = client.plan("Calculate thermal conductivity using kALDo BTE for silicon with 30x30x30 mesh")
+run_id = client.start(plan)
+
+results = client.results(run_id)
+print(f"Average κ at 300K: {results['kappa_W_per_mK'][0]:.1f} W/(m·K)")
+print(f"Phonon frequency range: {min(results['phonon_freq_THz']):.1f}-{max(results['phonon_freq_THz']):.1f} THz")
+print(f"Average lifetime: {sum(results['lifetimes_ps'])/len(results['lifetimes_ps']):.1f} ps")
+```
+
+### Example 3: Method Comparison
+
+See `examples/scripted_flow.py` and `examples/kaldo_bte_example.py` for complete workflows.
+
+## Architecture
+
+MCG uses a three-MCP architecture for clean separation of concerns:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Interfaces MCP │────▶│   Compute MCP   │────▶│   Memory MCP    │
+│                 │     │                 │     │                 │
+│ • NL Planning   │     │ • MP Fetcher    │     │ • Asset Store   │
+│ • Explanation   │     │ • LAMMPS Runner │     │ • Lineage Graph │
+│                 │     │ • kALDo Runner  │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### Project Structure
+
+```
+materialscodegraph/
+├── interfaces_mcp/               # Natural language processing
+├── compute_mcp/                  # Simulation runners
+├── memory_mcp/                   # Asset and lineage storage
+├── common/                       # Shared utilities
+├── cli/                          # Command-line interface
+├── examples/                     # Example workflows
+├── tests/                        # Test suite
+├── lammps/                       # LAMMPS reference code
+├── kaldo/                        # kALDo reference code
+├── README.md                     # This file
+├── LICENSE                       # MIT license
+├── requirements.txt              # Python dependencies
+└── docker-compose.yml            # Docker orchestration
+```
+
+### Adding New Methods
+
+To add support for a new computational method (e.g., VASP):
+
+1. **Create Runner** (`compute_mcp/runners/vasp.py`):
+```python
+class VASPRunner:
+    def run(self, run_obj, assets, params):
+        # Your implementation
+        return {"assets": results, "edges": lineage}
+```
+
+2. **Register Runner** (`compute_mcp/server.py`):
+```python
+elif runner_kind == "VASP":
+    runner = VASPRunner()
+```
+
+3. **Update NL Parser** (`interfaces_mcp/tools.py`):
+```python
+if 'vasp' in task_lower or 'dft' in task_lower:
+    runner_kind = "VASP"
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
+
+## Testing
+
+```bash
+# Run all tests
+python run_tests.py
+
+# Run specific test module
+python tests/test_schema.py
+
+# With pytest (if installed)
+pytest tests/ -v --cov=.
+```
+
+## Deployment
+
+### Local Development
+```bash
+python -m cli.mcg plan "your task"
+```
+
+### Docker Deployment
+```bash
+docker-compose up -d
+```
+
+### Production Deployment
+See `docker-compose.yml` for production configuration with PostgreSQL and Redis.
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `MP_API_KEY` | Materials Project API key | Yes |
+| `MCG_STORAGE_PATH` | Data storage directory | No |
+| `MCG_LOG_LEVEL` | Logging level (INFO, DEBUG) | No |
+| `LAMMPS_IMAGE` | Docker image for LAMMPS | No |
+| `KALDO_IMAGE` | Docker image for kALDo | No |
+
+### Configuration File
+
+Create `.env` file for persistent configuration:
+
+```bash
+MP_API_KEY=your_materials_project_api_key
+MCG_STORAGE_PATH=/opt/mcg/data
+MCG_LOG_LEVEL=INFO
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Issue: "No module named 'numpy'"**
+```bash
+pip install numpy
+```
+
+**Issue: "MP_API_KEY not set"**
+```bash
+export MP_API_KEY="your_api_key_here"
+```
+
+**Issue: "Run not found"**
+- Ensure the run ID is correct
+- Check if calculation completed: `mcg status RUN_ID`
+
+### Getting Help
+
+- 📖 [Documentation](https://github.com/materialscodegraph/materialscodegraph/wiki)
+- 💬 [Discussions](https://github.com/materialscodegraph/materialscodegraph/discussions)
+- 🐛 [Issue Tracker](https://github.com/materialscodegraph/materialscodegraph/issues)
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Contribution Steps
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Make changes with tests
+4. Run tests (`python run_tests.py`)
+5. Submit pull request
+
+## Citation
+
+If you use MaterialsCodeGraph in your research, please cite:
+
+```bibtex
+@software{materialscodegraph2024,
+  title = {MaterialsCodeGraph: MCP-based Materials Science Workflows},
+  author = {MaterialsCodeGraph Contributors},
+  year = {2024},
+  url = {https://github.com/materialscodegraph/materialscodegraph},
+  version = {1.0.0}
+}
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Materials Project for structure data and API
+- LAMMPS and kALDo communities for simulation tools
+- MCP specification contributors
+- All contributors to this project
+
+---
+
+**Built with ❤️ for the computational materials science community**
