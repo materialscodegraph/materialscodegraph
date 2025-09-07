@@ -6,15 +6,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from app.common.schema import Asset, Edge, Run
-from app.common.ids import asset_id, generate_id
-from app.common.io import write_uri
+import subprocess
+import numpy as np
+
+from common.schema import Asset, Edge, Run
+from common.ids import asset_id, generate_id
+from common.io import write_uri
+from common.config import get_config
 
 class KALDoRunner:
     """Runner for kALDo BTE thermal conductivity calculations"""
     
     def __init__(self):
         self.runner_version = "1.0.0"
+        self.config = get_config()
+        self.kaldo_config = self.config.get_kaldo_config()
+        self.execution_mode = self.config.get_execution_mode("kaldo")
     
     def run(self, run_obj: Run, assets: List[Asset], params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute kALDo BTE calculation"""
@@ -89,9 +96,9 @@ class KALDoRunner:
                         hash=fc_hash
                     )
                 
-                # Run kALDo BTE calculation (mocked)
-                kappa_results, phonon_data = self._simulate_bte_calculation(
-                    T_K, mesh, system_asset.payload
+                # Run kALDo BTE calculation
+                kappa_results, phonon_data = self._execute_kaldo(
+                    script_path, T_K, tmppath
                 )
                 
                 # Store computation log
@@ -275,11 +282,22 @@ for i, T in enumerate({T_K}):
     kappa = thermal_conductivity[i] if len({T_K}) > 1 else thermal_conductivity
     print(f"  T = {{T}} K: κ_xx = {{kappa[0,0]:.2f}}, κ_yy = {{kappa[1,1]:.2f}}, κ_zz = {{kappa[2,2]:.2f}} W/(m·K)")
 
-# Save detailed results
-np.save("{tmppath}/kappa_tensor.npy", thermal_conductivity)
-np.save("{tmppath}/frequencies.npy", phonons.frequency)
-np.save("{tmppath}/velocities.npy", phonons.velocity)
-np.save("{tmppath}/lifetimes.npy", phonons.bandwidth)
+# Save results in expected JSON format
+import json
+
+results = {{
+    "kappa_W_per_mK": [float(thermal_conductivity[i].mean()) for i in range(len({T_K}))],
+    "kappa_xx_W_per_mK": [float(thermal_conductivity[i][0,0]) for i in range(len({T_K}))],
+    "kappa_yy_W_per_mK": [float(thermal_conductivity[i][1,1]) for i in range(len({T_K}))],
+    "kappa_zz_W_per_mK": [float(thermal_conductivity[i][2,2]) for i in range(len({T_K}))],
+    "phonon_freq_THz": phonons.frequency[:10].tolist(),  # Sample first 10 modes
+    "lifetimes_ps": phonons.bandwidth[:10].tolist(),
+    "group_velocities": phonons.velocity[:10].tolist(),
+    "T_K": {T_K}
+}}
+
+with open("{tmppath}/kaldo_results.json", "w") as f:
+    json.dump(results, f, indent=2)
 
 print("kALDo calculation complete!")
 """
@@ -302,62 +320,80 @@ print("kALDo calculation complete!")
         
         return fc_data
     
-    def _simulate_bte_calculation(self, T_K, mesh, system):
-        """Simulate BTE thermal conductivity calculation"""
+    def _execute_kaldo(self, script_path, T_K, tmppath):
+        """Execute kALDo based on configuration mode"""
         
-        # Realistic silicon BTE results (higher than MD due to no scattering)
-        base_kappa_300K = 200.0  # W/(m*K) - BTE typically higher than Green-Kubo
-        
-        kappa_values = []
-        for T in T_K:
-            # BTE: κ ∝ T^(-1.3) for acoustic phonons
-            kappa = base_kappa_300K * (300.0/T)**1.3
-            # Add some anisotropy for tensor components
-            kappa_xx = kappa * 1.02  # Slightly higher in x
-            kappa_yy = kappa * 0.98  # Slightly lower in y  
-            kappa_zz = kappa * 1.00  # Reference in z
+        if self.execution_mode == "docker":
+            # Docker execution
+            docker_config = self.kaldo_config["execution"]["docker"]
             
-            kappa_values.append((kappa_xx + kappa_yy + kappa_zz) / 3.0)
+            cmd = [
+                "docker", "run",
+                "-v", f"{tmppath}:/work",
+                "--rm",
+                docker_config["image"],
+                docker_config["command"],
+                "/work/kaldo_script.py"
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"kALDo failed: {result.stderr}")
+            
+            # Parse output files
+            return self._parse_kaldo_output(tmppath, T_K)
         
-        # Generate phonon data
-        n_modes = mesh[0] * mesh[1] * mesh[2] * len(system["atoms"]) * 3
+        elif self.execution_mode == "local":
+            # Local execution
+            local_config = self.kaldo_config["execution"]["local"]
+            
+            # Set environment variables
+            env = os.environ.copy()
+            for key, value in local_config.get("environment", {}).items():
+                env[key] = str(value)
+            
+            # Build command
+            python_exe = local_config.get("python_executable", "python3")
+            cmd = f"{python_exe} {script_path}"
+            
+            result = subprocess.run(
+                cmd, shell=True, cwd=tmppath,
+                capture_output=True, text=True, env=env
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"kALDo failed: {result.stderr}")
+            
+            # Parse output files
+            return self._parse_kaldo_output(tmppath, T_K)
         
-        # Realistic phonon frequencies for silicon (0-16 THz)
-        frequencies = []
-        velocities = []
-        lifetimes = []
-        mode_contributions = []
+        else:
+            raise ValueError(f"Unknown execution mode: {self.execution_mode}")
+    
+    def _parse_kaldo_output(self, tmppath, T_K):
+        """Parse kALDo output files"""
+        output_file = tmppath / "kaldo_results.json"
         
-        for i in range(min(1000, n_modes)):  # Sample subset for demo
-            # Acoustic branch (low freq) and optical branches
-            if i < 100:  # Acoustic modes
-                freq = 2.0 + i * 0.1  # 2-12 THz
-                vel = 8000 - i * 20    # 8000-6000 m/s
-                lifetime = 100.0 / freq  # Longer for low freq
-                contribution = 0.8 / freq  # Acoustic dominates
-            else:  # Optical modes
-                freq = 12.0 + (i-100) * 0.005  # 12-16 THz
-                vel = 3000 + (i-100) * 2       # 3000-4000 m/s  
-                lifetime = 20.0 / freq         # Shorter for optical
-                contribution = 0.1 / freq      # Small contribution
-                
-            frequencies.append(freq)
-            velocities.append([vel, vel*0.9, vel*1.1])  # Anisotropic
-            lifetimes.append(lifetime)
-            mode_contributions.append(contribution)
+        if not output_file.exists():
+            raise FileNotFoundError(f"kALDo output file {output_file} not found")
         
+        with open(output_file) as f:
+            results = json.load(f)
+        
+        # Extract thermal conductivity results
         kappa_results = {
-            "kappa_total": kappa_values,
-            "kappa_xx": [k*1.02 for k in kappa_values],
-            "kappa_yy": [k*0.98 for k in kappa_values], 
-            "kappa_zz": kappa_values
+            "kappa_total": results.get("kappa_W_per_mK", []),
+            "kappa_xx": results.get("kappa_xx_W_per_mK", []),
+            "kappa_yy": results.get("kappa_yy_W_per_mK", []),
+            "kappa_zz": results.get("kappa_zz_W_per_mK", [])
         }
         
+        # Extract phonon data
         phonon_data = {
-            "frequencies": frequencies,
-            "velocities": velocities,
-            "lifetimes": lifetimes,
-            "mode_contributions": mode_contributions
+            "frequencies": results.get("phonon_freq_THz", []),
+            "velocities": results.get("group_velocities", []),
+            "lifetimes": results.get("lifetimes_ps", []),
+            "mode_contributions": results.get("mode_contributions", [])
         }
         
         return kappa_results, phonon_data
