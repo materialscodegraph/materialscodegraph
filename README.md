@@ -25,7 +25,7 @@ MaterialsCodeGraph (MCG) enables **natural language driven computational workflo
 
 ```bash
 # Example: One command to get thermal conductivity
-mcg plan "Calculate thermal conductivity for silicon using LAMMPS at 300-800K"
+mcg plan "Calculate thermal conductivity for silicon using LAMMPS at 300-800K" > plan.json
 ```
 
 ### Why MaterialsCodeGraph?
@@ -189,6 +189,99 @@ Results include detailed thermal transport properties:
   "lifetimes_ps": [47.6, 22.2, 12.8, 8.1, 6.8],
   "method": "BTE",
   "solver": "kALDo"
+}
+```
+
+## Configuration
+
+MCG-lite uses a centralized `config.json` file to manage all computational codes and execution settings. This allows users to easily customize how simulations are run without modifying code.
+
+### Configuration File Location
+
+The system searches for `config.json` in the following order:
+1. Current directory
+2. Repository root
+3. Path specified in `MCG_CONFIG_PATH` environment variable
+4. `~/.mcg/config.json` (user home)
+
+### Configuration Structure
+
+```json
+{
+  "codes": {
+    "lammps": {
+      "enabled": true,
+      "execution": {
+        "mode": "docker",  // Options: mock, docker, local, hpc
+        "docker": {
+          "image": "lammps/lammps:stable",
+          "command": "lmp"
+        },
+        "local": {
+          "executable": "/usr/local/bin/lammps",
+          "mpi_command": "mpirun -np 4"
+        }
+      },
+      "defaults": {
+        "timestep_fs": 1.0,
+        "equil_ps": 100,
+        "prod_ps": 500
+      }
+    }
+  }
+}
+```
+
+### Execution Modes
+
+- **docker**: Runs LAMMPS in a Docker container
+- **local**: Uses locally installed LAMMPS executable  
+- **hpc**: Submits jobs to HPC scheduler (SLURM)
+
+### Environment Variables
+
+Override configuration with environment variables:
+- `MCG_LAMMPS_MODE`: Set execution mode (docker/local/hpc)
+- `MCG_LAMMPS_EXECUTABLE`: Path to LAMMPS executable
+- `MCG_STORAGE_PATH`: Base path for data storage
+- `MP_API_KEY`: Materials Project API key
+
+### Quick Setup Examples
+
+#### For Local LAMMPS Installation
+```json
+{
+  "codes": {
+    "lammps": {
+      "execution": {
+        "mode": "local",
+        "local": {
+          "executable": "/usr/bin/lmp",
+          "mpi_command": "mpirun -np 8"
+        }
+      }
+    }
+  }
+}
+```
+
+#### For Docker Execution
+```json
+{
+  "codes": {
+    "lammps": {
+      "execution": {
+        "mode": "docker",
+        "docker": {
+          "image": "lammps/lammps:stable",
+          "gpu": {
+            "enabled": true,
+            "runtime": "nvidia"
+          }
+        }
+      }
+    }
+  }
 }
 ```
 

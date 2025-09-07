@@ -8,15 +8,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from app.common.schema import Asset, Edge, Run
-from app.common.ids import asset_id, generate_id
-from app.common.io import write_uri
+from common.schema import Asset, Edge, Run
+from common.ids import asset_id, generate_id
+from common.io import write_uri
+from common.config import get_config, get_lammps_executable, get_lammps_defaults
 
 class LAMMPSKappaGKRunner:
     """Runner for LAMMPS Green-Kubo thermal conductivity simulations"""
     
     def __init__(self):
         self.runner_version = "1.0.0"
+        self.config = get_config()
+        self.lammps_config = self.config.get_lammps_config()
+        self.execution_mode = self.config.get_execution_mode("lammps")
     
     def run(self, run_obj: Run, assets: List[Asset], params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute LAMMPS Green-Kubo simulation"""
@@ -39,13 +43,14 @@ class LAMMPSKappaGKRunner:
         if not method_asset:
             raise ValueError("Method asset required")
         
-        # Get simulation parameters
+        # Get simulation parameters with config defaults
+        defaults = get_lammps_defaults()
         supercell = params.get("supercell", [10, 10, 10])
         T_K = params.get("T_K", [300, 400, 500, 600, 700, 800])
-        timestep_fs = params.get("timestep_fs", 1.0)
-        equil_ps = params.get("equil_ps", 100)
-        prod_ps = params.get("prod_ps", 500)
-        HFACF_window_ps = params.get("HFACF_window_ps", 200)
+        timestep_fs = params.get("timestep_fs", defaults.get("timestep_fs", 1.0))
+        equil_ps = params.get("equil_ps", defaults.get("equil_ps", 100))
+        prod_ps = params.get("prod_ps", defaults.get("prod_ps", 500))
+        HFACF_window_ps = params.get("HFACF_window_ps", defaults.get("HFACF_window_ps", 200))
         
         # Update run status
         run_obj.status = "running"
@@ -76,9 +81,10 @@ class LAMMPSKappaGKRunner:
                 data_file = tmppath / "structure.data"
                 self._write_lammps_data(system_asset.payload, supercell, data_file)
                 
-                # Run LAMMPS (in practice would use container/HPC)
-                # For now, simulate results
-                kappa_results = self._simulate_kappa_calculation(T_K)
+                # Run LAMMPS based on execution mode from config
+                kappa_results = self._execute_lammps(
+                    script_path, data_file, T_K, tmppath
+                )
                 
                 # Store log as artifact
                 log_uri = f"mcg://logs/lammps_{run_obj.id}.txt"
@@ -280,18 +286,133 @@ uncompute flux
             for i, atom in enumerate(atoms, 1):
                 f.write(f"{i} 1 {atom['pos'][0]} {atom['pos'][1]} {atom['pos'][2]}\n")
     
-    def _simulate_kappa_calculation(self, T_K):
-        """Simulate thermal conductivity results (placeholder)"""
-        # Realistic values for silicon
-        # κ decreases with temperature
-        kappa_300K = 150.0  # W/(m*K) for silicon at 300K
+    def _execute_lammps(self, script_path, data_file, T_K, tmppath):
+        """Execute LAMMPS based on configuration mode"""
         
+        if self.execution_mode == "docker":
+            # Docker execution
+            docker_config = self.lammps_config["execution"]["docker"]
+            
+            cmd = [
+                "docker", "run",
+                "-v", f"{tmppath}:/work",
+                "--rm"
+            ]
+            
+            # Add GPU support if configured
+            if docker_config.get("gpu", {}).get("enabled", False):
+                cmd.extend(["--runtime", docker_config["gpu"]["runtime"]])
+                cmd.extend(["--gpus", docker_config["gpu"]["devices"]])
+            
+            cmd.extend([
+                docker_config["image"],
+                docker_config["command"],
+                "-in", "/work/in.kappa_gk"
+            ])
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                raise RuntimeError(f"LAMMPS failed: {result.stderr}")
+            
+            # Parse output files
+            return self._parse_lammps_output(tmppath, T_K)
+        
+        elif self.execution_mode == "local":
+            # Local execution
+            local_config = self.lammps_config["execution"]["local"]
+            
+            # Set environment variables
+            env = os.environ.copy()
+            for key, value in local_config.get("environment", {}).items():
+                env[key] = str(value)
+            
+            # Build command
+            executable = local_config["executable"]
+            mpi_command = local_config.get("mpi_command", "")
+            
+            if mpi_command:
+                cmd = f"{mpi_command} {executable} -in {script_path}"
+            else:
+                cmd = f"{executable} -in {script_path}"
+            
+            result = subprocess.run(
+                cmd, shell=True, cwd=tmppath,
+                capture_output=True, text=True, env=env
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"LAMMPS failed: {result.stderr}")
+            
+            # Parse output files
+            return self._parse_lammps_output(tmppath, T_K)
+        
+        elif self.execution_mode == "hpc":
+            # HPC submission
+            hpc_config = self.lammps_config["execution"]["hpc"]
+            
+            # Generate SLURM script
+            slurm_script = self._generate_slurm_script(
+                hpc_config, script_path, tmppath
+            )
+            
+            slurm_path = tmppath / "submit.sh"
+            with open(slurm_path, "w") as f:
+                f.write(slurm_script)
+            
+            # Submit job
+            result = subprocess.run(
+                ["sbatch", str(slurm_path)],
+                capture_output=True, text=True
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"Job submission failed: {result.stderr}")
+            
+            # In real implementation, would monitor job and wait for completion
+            # Parse output after job completes
+            return self._parse_lammps_output(tmppath, T_K)
+        
+        else:
+            raise ValueError(f"Unknown execution mode: {self.execution_mode}")
+    
+    def _parse_lammps_output(self, tmppath, T_K):
+        """Parse LAMMPS output files for thermal conductivity"""
         kappa_values = []
+        
         for T in T_K:
-            # Simple model: κ ∝ T^(-1.2)
-            kappa = kappa_300K * (300.0/T)**1.2
-            # Add some noise
-            kappa += np.random.normal(0, kappa*0.05)
-            kappa_values.append(round(kappa, 2))
+            kappa_file = tmppath / f"kappa_{T}K.txt"
+            if kappa_file.exists():
+                with open(kappa_file) as f:
+                    # Parse the actual LAMMPS output format
+                    # This would need to match your LAMMPS output
+                    lines = f.readlines()
+                    for line in lines:
+                        if "kappa" in line:
+                            kappa = float(line.split()[-1])
+                            kappa_values.append(kappa)
+                            break
+            else:
+                # If file doesn't exist, raise error
+                raise FileNotFoundError(f"LAMMPS output file {kappa_file} not found")
         
         return kappa_values
+    
+    def _generate_slurm_script(self, hpc_config, script_path, tmppath):
+        """Generate SLURM submission script"""
+        modules = " ".join([f"module load {m}" for m in hpc_config.get("modules", [])])
+        
+        return f"""#!/bin/bash
+#SBATCH --job-name=lammps_kappa
+#SBATCH --partition={hpc_config['partition']}
+#SBATCH --nodes={hpc_config['nodes']}
+#SBATCH --ntasks-per-node={hpc_config['tasks_per_node']}
+#SBATCH --time={hpc_config['time']}
+#SBATCH --gres=gpu:{hpc_config.get('gpus_per_node', 0)}
+#SBATCH --output=lammps_%j.out
+#SBATCH --error=lammps_%j.err
+
+{modules}
+
+cd {tmppath}
+srun {hpc_config['executable']} -in {script_path.name}
+"""
