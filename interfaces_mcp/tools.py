@@ -59,8 +59,8 @@ class InterfacesTools:
                 else:
                     missing.append("temperature_grid")
             
-            # Look for supercell
-            supercell_pattern = r'(\d+)\s*x\s*(\d+)\s*x\s*(\d+)|supercell'
+            # Look for supercell - supports formats like "20x20x20", "(20, 20, 20)", "[20, 20, 20]", or "20 20 20"
+            supercell_pattern = r'(?:[\(\[]?\s*(\d+)[\s,x]+(\d+)[\s,x]+(\d+)\s*[\)\]]?)'
             supercell_match = re.search(supercell_pattern, task_lower)
             if supercell_match and supercell_match.group(1):
                 params["supercell"] = [
