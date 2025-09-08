@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 import subprocess
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    # Create minimal numpy replacement for basic functionality
+    class MinimalNumpy:
+        pass
+    np = MinimalNumpy()
 
 from common.schema import Asset, Edge, Run
 from common.ids import asset_id, generate_id

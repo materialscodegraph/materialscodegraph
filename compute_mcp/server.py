@@ -8,11 +8,11 @@ from mcp import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
-from app.common.schema import Asset, Edge, Run
-from app.common.ids import run_id
-from app.compute_mcp.runners.materials_project import MaterialsProjectRunner
-from app.compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
-from app.compute_mcp.runners.kaldo_bte import KALDoRunner
+from common.schema import Asset, Edge, Run
+from common.ids import run_id
+from compute_mcp.runners.materials_project import MaterialsProjectRunner
+from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
+from compute_mcp.runners.kaldo_bte import KALDoRunner
 
 # Create MCP server
 app = Server("compute-mcp")

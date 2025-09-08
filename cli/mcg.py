@@ -16,8 +16,8 @@ class MCGClient:
     def __init__(self):
         # In production, would initialize MCP connections
         self.interfaces = InterfacesMCP()
-        self.compute = ComputeMCP()
-        self.memory = MemoryMCP()
+        self.memory = MemoryMCP()  # Create shared memory instance
+        self.compute = ComputeMCP(shared_memory=self.memory)
     
     def plan(self, task: str) -> Dict[str, Any]:
         """Create execution plan from natural language task"""
@@ -38,7 +38,7 @@ class MCGClient:
             params=plan.get("params", {})
         )
         
-        return run["id"]
+        return run.id
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Check run status"""
@@ -97,28 +97,57 @@ class InterfacesMCP:
         return tools.explain(assets, edges)
 
 class ComputeMCP:
+    def __init__(self, shared_memory=None):
+        self.shared_memory = shared_memory
+    
     def start(self, runner_kind: str, asset_ids: list, params: dict) -> Dict[str, Any]:
-        """Mock compute start"""
+        """Start actual compute run"""
         from common.ids import run_id
+        from common.schema import Run, Asset
         
-        run = {
-            "id": run_id(),
-            "kind": runner_kind,
-            "status": "running"
-        }
+        # Create run object
+        run_obj = Run(
+            id=run_id(),
+            kind=runner_kind,
+            status="running",
+            runner_version="1.0.0"
+        )
         
-        # Simulate computation
-        if runner_kind == "MaterialsProject":
-            # Would actually run MP fetcher
-            pass
-        elif runner_kind == "LAMMPS":
-            # Would actually run LAMMPS
-            pass
-        elif runner_kind == "kALDo":
-            # Would actually run kALDo
-            pass
+        # Get assets from memory
+        memory = self.shared_memory or MemoryMCP()
+        assets = []
+        if asset_ids:
+            stored_assets = memory.get_assets(asset_ids)
+            assets = [Asset.from_dict(a) for a in stored_assets if a is not None]
         
-        return run
+        # Execute appropriate runner
+        try:
+            if runner_kind == "MaterialsProject":
+                from compute_mcp.runners.materials_project import MaterialsProjectRunner
+                runner = MaterialsProjectRunner()
+                result = runner.run(run_obj, assets, params)
+            elif runner_kind == "LAMMPS":
+                from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
+                runner = LAMMPSKappaGKRunner()
+                result = runner.run(run_obj, assets, params)
+            elif runner_kind == "kALDo":
+                from compute_mcp.runners.kaldo_bte import KALDoRunner
+                runner = KALDoRunner()
+                result = runner.run(run_obj, assets, params)
+            else:
+                raise ValueError(f"Unknown runner kind: {runner_kind}")
+            
+            # Store results in shared memory  
+            if result.get("assets"):
+                memory.put_assets([a.to_dict() for a in result["assets"]])
+            if result.get("edges"):
+                memory.link([edge.to_dict() for edge in result["edges"]])
+            
+            return result["run"]
+            
+        except Exception as e:
+            run_obj.status = "error"
+            raise e
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Mock status check"""
@@ -129,65 +158,26 @@ class ComputeMCP:
         }
     
     def results(self, run_id: str) -> Dict[str, Any]:
-        """Mock results retrieval"""
-        # Return simulated results for demonstration
-        from common.schema import Asset
-        from common.ids import asset_id
+        """Retrieve actual results from memory"""
+        memory = self.shared_memory or MemoryMCP()
         
-        # Check if this was a kALDo run based on run characteristics
-        # In reality would check stored run metadata
-        is_kaldo = run_id.endswith(('a', 'b', 'c', 'd', 'e', 'f'))  # Heuristic
+        # Query edges to find assets produced by this run
+        edges = memory.query_edges(from_id=run_id)
         
-        if is_kaldo:
-            # Simulate BTE results (higher values, tensor components)
-            results_asset = Asset(
-                type="Results",
-                id=asset_id("Results", {"run": run_id}),
-                payload={
-                    "T_K": [300, 400, 500, 600, 700, 800],
-                    "kappa_W_per_mK": [185.2, 125.8, 89.3, 68.1, 54.2, 44.8],
-                    "kappa_xx_W_per_mK": [188.9, 128.3, 91.1, 69.5, 55.3, 45.7],
-                    "kappa_yy_W_per_mK": [181.5, 123.3, 87.5, 66.7, 53.1, 43.9],
-                    "kappa_zz_W_per_mK": [185.2, 125.8, 89.3, 68.1, 54.2, 44.8],
-                    "method": "BTE",
-                    "solver": "kALDo",
-                    "mesh": [20, 20, 20],
-                    "phonon_freq_THz": [2.1, 4.5, 7.8, 12.3, 14.6],
-                    "lifetimes_ps": [47.6, 22.2, 12.8, 8.1, 6.8],
-                    "broadening_shape": "gauss",
-                    "broadening_width_meV": 1.0
-                },
-                units={
-                    "T_K": "K",
-                    "kappa_W_per_mK": "W/(m*K)",
-                    "kappa_xx_W_per_mK": "W/(m*K)",
-                    "kappa_yy_W_per_mK": "W/(m*K)",
-                    "kappa_zz_W_per_mK": "W/(m*K)",
-                    "phonon_freq_THz": "THz",
-                    "lifetimes_ps": "ps",
-                    "broadening_width_meV": "meV"
-                }
-            )
-        else:
-            # Simulate LAMMPS Green-Kubo results
-            results_asset = Asset(
-                type="Results",
-                id=asset_id("Results", {"run": run_id}),
-                payload={
-                    "T_K": [300, 400, 500, 600, 700, 800],
-                    "kappa_W_per_mK": [148.5, 95.2, 68.1, 51.3, 40.2, 32.5],
-                    "method": "Green-Kubo",
-                    "supercell": [20, 20, 20]
-                },
-                units={
-                    "T_K": "K",
-                    "kappa_W_per_mK": "W/(m*K)"
-                }
-            )
+        # Find assets produced by this run
+        result_assets = []
+        for edge_dict in edges:
+            if edge_dict["rel"] == "PRODUCES":
+                asset = memory.get_asset(edge_dict["to"])
+                if asset:
+                    result_assets.append(asset)
+        
+        if not result_assets:
+            raise ValueError(f"No assets found for run {run_id}")
         
         return {
-            "assets": [results_asset.to_dict()],
-            "edges": []
+            "assets": result_assets,
+            "edges": edges
         }
 
 class MemoryMCP:
@@ -213,6 +203,21 @@ class MemoryMCP:
         
         edge_objs = [Edge.from_dict(e) for e in edges]
         return self.store.append_edges(edge_objs)
+    
+    def get_asset(self, asset_id: str) -> dict:
+        """Get single asset"""
+        asset = self.store.get_asset(asset_id)
+        return asset.to_dict() if asset else None
+    
+    def get_assets(self, asset_ids: list) -> list:
+        """Get multiple assets"""
+        assets = self.store.get_assets(asset_ids)
+        return [a.to_dict() for a in assets]
+    
+    def query_edges(self, **kwargs) -> list:
+        """Query edges"""
+        edges = self.store.query_edges(**kwargs)
+        return [e.to_dict() for e in edges]
     
     def ledger(self, query) -> list:
         """Query ledger"""
@@ -315,10 +320,36 @@ Examples:
                 run_id1 = client.start(mp_plan)
                 print(f"Step 1 - Materials Project fetch: {run_id1}")
                 
-                # Step 2: Run kappa calculation
+                # Step 2: Run kappa calculation using assets from Step 1
+                step1_results = client.results(run_id1)
+                
+                # Combine System asset from Step 1 with Method/Params from original plan
+                combined_assets = step1_results["assets"]  # System asset from MaterialsProject
+                
+                # Add Method and Params assets from original plan
+                for asset in plan.get("assets", []):
+                    if asset["type"] in ["Method", "Params"]:
+                        combined_assets.append(asset)
+                
+                # If no Method asset found, add a default LAMMPS method
+                has_method = any(asset["type"] == "Method" for asset in combined_assets)
+                if not has_method:
+                    from common.ids import generate_id
+                    method_asset = {
+                        "type": "Method",
+                        "id": generate_id("M"),
+                        "payload": {
+                            "family": "MD",
+                            "code": "LAMMPS", 
+                            "model": "LJ",
+                            "device": "CPU"
+                        }
+                    }
+                    combined_assets.append(method_asset)
+                
                 lammps_plan = {
-                    "runner_kind": "LAMMPS",
-                    "assets": plan["assets"],
+                    "runner_kind": "LAMMPS", 
+                    "assets": combined_assets,
                     "params": plan["params"]
                 }
                 run_id2 = client.start(lammps_plan)
