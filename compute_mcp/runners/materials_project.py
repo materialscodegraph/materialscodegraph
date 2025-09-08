@@ -3,90 +3,12 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+
 try:
     from mp_api.client import MPRester
     MP_API_AVAILABLE = True
 except ImportError:
-    class MockDoc:
-        def __init__(self):
-            self.structure = MockStructure()
-            self.formula_pretty = "Si"
-            self.band_gap = 1.1
-            self.energy_per_atom = -5.4
-            self.formation_energy_per_atom = 0.0
-    
-    class MockSpecie:
-        def __init__(self, symbol):
-            self.symbol = symbol
-    
-    class MockCoords:
-        def __init__(self, coords):
-            self._coords = coords
-        def tolist(self):
-            return self._coords
-    
-    class MockSite:
-        def __init__(self, specie, coords):
-            self.specie = MockSpecie(specie)
-            self.coords = MockCoords(coords)
-    
-    class MockStructure:
-        def __init__(self):
-            self.lattice = MockLattice()
-            self._sites = [
-                MockSite("Si", [0.0, 0.0, 0.0]),
-                MockSite("Si", [1.35, 1.35, 1.35]),
-                MockSite("Si", [2.7, 0.0, 2.7]),
-                MockSite("Si", [4.05, 1.35, 4.05]),
-                MockSite("Si", [0.0, 2.7, 2.7]),
-                MockSite("Si", [1.35, 4.05, 4.05]),
-                MockSite("Si", [2.7, 2.7, 0.0]),
-                MockSite("Si", [4.05, 4.05, 1.35])
-            ]
-        
-        def __iter__(self):
-            return iter(self._sites)
-        
-        def as_dict(self):
-            return {
-                "@module": "pymatgen.core.structure",
-                "@class": "Structure",
-                "lattice": self.lattice.matrix.tolist(),
-                "sites": [
-                    {
-                        "species": [{"element": site.specie.symbol, "occu": 1}],
-                        "abc": site.coords.tolist(),
-                        "xyz": site.coords.tolist()
-                    } for site in self._sites
-                ]
-            }
-    
-    class MockMatrix:
-        def __init__(self, matrix):
-            self._matrix = matrix
-        def tolist(self):
-            return self._matrix
-    
-    class MockLattice:
-        def __init__(self):
-            self.matrix = MockMatrix([[5.43, 0, 0], [0, 5.43, 0], [0, 0, 5.43]])
-    
-    class MockSummary:
-        def search(self, **kwargs):
-            return [MockDoc()]
-    
-    class MockMaterials:
-        def __init__(self):
-            self.summary = MockSummary()
-    
-    class MockMPRester:
-        def __init__(self, api_key):
-            self.materials = MockMaterials()
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            pass
-    MPRester = MockMPRester
+    MPRester = None
     MP_API_AVAILABLE = False
 
 from common.schema import Asset, Edge, Run
@@ -96,14 +18,22 @@ from common.io import write_uri
 class MaterialsProjectRunner:
     """Runner for fetching structures from Materials Project"""
     
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("MP_API_KEY")
-        if not MP_API_AVAILABLE:
-            # In mock mode, don't require API key
-            self.api_key = "mock"
-        elif not self.api_key:
-            raise ValueError("MP_API_KEY environment variable required")
+    def __init__(self):
         self.runner_version = "1.0.0"
+        
+        # Check if MP API is available
+        if not MP_API_AVAILABLE:
+            raise ImportError(
+                "Materials Project API not available. Please install: pip install mp-api"
+            )
+        
+        # Get API key from environment
+        self.api_key = os.environ.get("MP_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "MP_API_KEY environment variable required. "
+                "Get your API key from https://materialsproject.org/api"
+            )
     
     def run(self, run_obj: Run, assets: List[Asset], params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute Materials Project fetch"""
@@ -116,8 +46,13 @@ class MaterialsProjectRunner:
         run_obj.started_at = datetime.utcnow().isoformat()
         
         try:
+            print("=== Materials Project API Request ===")
+            print(f"Fetching material: {material_id}")
+            
             # Fetch from Materials Project
             with MPRester(self.api_key) as mpr:
+                print("Connected to Materials Project API")
+                
                 # Get structure and basic properties
                 docs = mpr.materials.summary.search(
                     material_ids=[material_id],
@@ -130,6 +65,13 @@ class MaterialsProjectRunner:
                 
                 doc = docs[0]
                 structure = doc.structure
+                
+                print(f"Successfully fetched: {doc.formula_pretty}")
+                print(f"Space group: {structure.get_space_group_info()}")
+                print(f"Lattice: {structure.lattice}")
+                print(f"Number of atoms: {len(structure)}")
+                print(f"Band gap: {doc.band_gap} eV")
+                print(f"Energy per atom: {doc.energy_per_atom} eV/atom")
             
             # Convert to MCG System format
             atoms = []
@@ -194,7 +136,13 @@ class MaterialsProjectRunner:
             ]
             
             # Add edge from params if params was an asset
-            for asset in assets:
+            for asset_data in assets:
+                # Ensure we have Asset objects, not dictionaries
+                if isinstance(asset_data, dict):
+                    asset = Asset.from_dict(asset_data)
+                else:
+                    asset = asset_data
+                    
                 if asset.type == "Params":
                     edges.append(Edge(
                         from_id=asset.id,
@@ -208,12 +156,15 @@ class MaterialsProjectRunner:
             run_obj.ended_at = datetime.utcnow().isoformat()
             
             return {
-                "assets": [system_asset, artifact_asset],
-                "edges": edges,
-                "run": run_obj
+                "run": run_obj.to_dict(),
+                "assets": [system_asset.to_dict(), artifact_asset.to_dict()],
+                "edges": [e.to_dict() for e in edges]
             }
             
         except Exception as e:
             run_obj.status = "error"
             run_obj.ended_at = datetime.utcnow().isoformat()
-            raise e
+            run_obj.error_message = str(e)
+            
+            print(f"Materials Project API Error: {e}")
+            raise

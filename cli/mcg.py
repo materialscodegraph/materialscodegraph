@@ -38,7 +38,7 @@ class MCGClient:
             params=plan.get("params", {})
         )
         
-        return run.id
+        return run["id"]
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Check run status"""
@@ -70,31 +70,43 @@ class MCGClient:
             ledger_slice=ledger
         )
 
-# Mock MCP implementations for demonstration
+# Interfaces MCP client
 class InterfacesMCP:
     def plan(self, task: str) -> Dict[str, Any]:
-        """Mock plan generation"""
-        from interfaces_mcp.tools import InterfacesTools
-        tools = InterfacesTools()
-        plan = tools.plan(task)
-        
-        # Convert assets to dicts
-        plan["assets"] = [a.to_dict() for a in plan["assets"]]
-        
-        return plan
+        """Generate execution plan from natural language task"""
+        try:
+            from interfaces_mcp.tools import InterfacesTools
+            tools = InterfacesTools()
+            plan = tools.plan(task)
+            
+            # Convert assets to dicts
+            plan["assets"] = [a.to_dict() for a in plan["assets"]]
+            
+            return plan
+        except ImportError:
+            raise ImportError(
+                "Interfaces MCP tools not available. "
+                "Please ensure interfaces_mcp module is properly installed."
+            )
     
     def explain(self, results_assets, ledger_slice) -> str:
-        """Mock explanation generation"""
-        from interfaces_mcp.tools import InterfacesTools
-        from common.schema import Asset, Edge
-        
-        tools = InterfacesTools()
-        
-        # Convert dicts to objects
-        assets = [Asset.from_dict(a) for a in results_assets]
-        edges = [Edge.from_dict(e) for e in ledger_slice]
-        
-        return tools.explain(assets, edges)
+        """Generate explanation of results"""
+        try:
+            from interfaces_mcp.tools import InterfacesTools
+            from common.schema import Asset, Edge
+            
+            tools = InterfacesTools()
+            
+            # Convert dicts to objects
+            assets = [Asset.from_dict(a) for a in results_assets]
+            edges = [Edge.from_dict(e) for e in ledger_slice]
+            
+            return tools.explain(assets, edges)
+        except ImportError:
+            raise ImportError(
+                "Interfaces MCP tools not available. "
+                "Please ensure interfaces_mcp module is properly installed."
+            )
 
 class ComputeMCP:
     def __init__(self, shared_memory=None):
@@ -139,9 +151,9 @@ class ComputeMCP:
             
             # Store results in shared memory  
             if result.get("assets"):
-                memory.put_assets([a.to_dict() for a in result["assets"]])
+                memory.put_assets(result["assets"])  # Already dictionaries
             if result.get("edges"):
-                memory.link([edge.to_dict() for edge in result["edges"]])
+                memory.link(result["edges"])  # Already dictionaries
             
             return result["run"]
             
@@ -150,8 +162,9 @@ class ComputeMCP:
             raise e
     
     def status(self, run_id: str) -> Dict[str, Any]:
-        """Mock status check"""
-        # In reality, would check actual run status
+        """Check run status"""
+        # TODO: Implement proper status tracking
+        # For now, assume all runs are completed
         return {
             "status": "done",
             "eta": None
@@ -191,8 +204,13 @@ class MemoryMCP:
         from common.schema import Asset
         
         ids = []
-        for asset_dict in assets:
-            asset = Asset.from_dict(asset_dict)
+        for asset_data in assets:
+            # Handle both Asset objects and dictionaries
+            if isinstance(asset_data, dict):
+                asset = Asset.from_dict(asset_data)
+            else:
+                # Already an Asset object
+                asset = asset_data
             aid = self.store.put_asset(asset)
             ids.append(aid)
         return ids
@@ -201,7 +219,15 @@ class MemoryMCP:
         """Store edges"""
         from common.schema import Edge
         
-        edge_objs = [Edge.from_dict(e) for e in edges]
+        edge_objs = []
+        for edge_data in edges:
+            # Handle both Edge objects and dictionaries
+            if isinstance(edge_data, dict):
+                edge = Edge.from_dict(edge_data)
+            else:
+                # Already an Edge object
+                edge = edge_data
+            edge_objs.append(edge)
         return self.store.append_edges(edge_objs)
     
     def get_asset(self, asset_id: str) -> dict:
@@ -267,6 +293,13 @@ Examples:
     explain_parser = subparsers.add_parser("explain", help="Explain results")
     explain_parser.add_argument("run_id", help="Run ID to explain")
     
+    # Run command (combines plan and start)
+    run_parser = subparsers.add_parser("run", help="Plan and execute task in one step")
+    run_parser.add_argument("task", help="Natural language task description or plan file")
+    run_parser.add_argument("-o", "--output", help="Save final results to file")
+    run_parser.add_argument("--save-plan", help="Save intermediate plan to file")
+    run_parser.add_argument("--dry-run", action="store_true", help="Only create plan, don't execute")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -307,56 +340,63 @@ Examples:
                 with open(args.plan, "r") as f:
                     plan = json.load(f)
             
-            # Handle workflow
+            # Handle workflow execution in start command as well
             if plan.get("workflow") == "fetch_then_kappa":
-                # Two-step workflow
-                print("Starting two-step workflow: fetch then kappa")
-                
-                # Step 1: Fetch structure
-                mp_plan = {
-                    "runner_kind": "MaterialsProject",
-                    "params": {"material_id": plan["params"]["material_id"]}
-                }
-                run_id1 = client.start(mp_plan)
-                print(f"Step 1 - Materials Project fetch: {run_id1}")
-                
-                # Step 2: Run kappa calculation using assets from Step 1
-                step1_results = client.results(run_id1)
-                
-                # Combine System asset from Step 1 with Method/Params from original plan
-                combined_assets = step1_results["assets"]  # System asset from MaterialsProject
-                
-                # Add Method and Params assets from original plan
-                for asset in plan.get("assets", []):
-                    if asset["type"] in ["Method", "Params"]:
-                        combined_assets.append(asset)
-                
-                # If no Method asset found, add a default LAMMPS method
-                has_method = any(asset["type"] == "Method" for asset in combined_assets)
-                if not has_method:
-                    from common.ids import generate_id
-                    method_asset = {
-                        "type": "Method",
-                        "id": generate_id("M"),
-                        "payload": {
-                            "family": "MD",
-                            "code": "LAMMPS", 
-                            "model": "LJ",
-                            "device": "CPU"
-                        }
+                try:
+                    # Two-step workflow
+                    print("Starting two-step workflow: fetch then kappa")
+                    
+                    # Step 1: Fetch structure
+                    mp_plan = {
+                        "runner_kind": "MaterialsProject",
+                        "assets": [a for a in plan["assets"] if a["type"] == "Params"],
+                        "params": plan["params"]
                     }
-                    combined_assets.append(method_asset)
-                
-                lammps_plan = {
-                    "runner_kind": "LAMMPS", 
-                    "assets": combined_assets,
-                    "params": plan["params"]
-                }
-                run_id2 = client.start(lammps_plan)
-                print(f"Step 2 - LAMMPS kappa calculation: {run_id2}")
-                print(f"Run IDs: {run_id1}, {run_id2}")
+                    run_id1 = client.start(mp_plan)
+                    print(f"Step 1 - Materials Project fetch: {run_id1}")
+                    
+                    # Step 2: Run kappa calculation using assets from Step 1
+                    step1_results = client.results(run_id1)
+                    
+                    # Combine System asset from Step 1 with Method/Params from original plan
+                    combined_assets = step1_results["assets"]  # System asset from MaterialsProject
+                    
+                    # Add Method and Params assets from original plan
+                    for asset in plan.get("assets", []):
+                        if asset["type"] in ["Method", "Params"]:
+                            combined_assets.append(asset)
+                    
+                    # If no Method asset found, add a default LAMMPS method
+                    has_method = any(asset["type"] == "Method" for asset in combined_assets)
+                    if not has_method:
+                        from common.ids import generate_id
+                        method_asset = {
+                            "type": "Method",
+                            "id": generate_id("M"),
+                            "payload": {
+                                "family": "MD",
+                                "code": "LAMMPS", 
+                                "model": "LJ",
+                                "device": "CPU"
+                            }
+                        }
+                        combined_assets.append(method_asset)
+                    
+                    # Run LAMMPS calculation
+                    lammps_plan = {
+                        "runner_kind": "LAMMPS",
+                        "assets": combined_assets,
+                        "params": plan["params"]
+                    }
+                    run_id2 = client.start(lammps_plan)
+                    print(f"Step 2 - LAMMPS kappa calculation: {run_id2}")
+                    print(f"Run IDs: {run_id1}, {run_id2}")
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    raise
             else:
-                # Single runner
+                # Single-step execution
                 run_id = client.start(plan)
                 print(f"Started run: {run_id}")
         
@@ -389,6 +429,130 @@ Examples:
         elif args.command == "explain":
             explanation = client.explain(args.run_id)
             print(explanation)
+        
+        elif args.command == "run":
+            # Combined plan and execute command
+            
+            # Check if task is a file path (existing plan)
+            if args.task.endswith('.json') and Path(args.task).exists():
+                print(f"Loading plan from: {args.task}")
+                with open(args.task, "r") as f:
+                    plan = json.load(f)
+            else:
+                # Create plan from natural language task
+                print(f"Creating plan for: {args.task}")
+                plan = client.plan(args.task)
+                
+                # Check for missing parameters
+                if plan.get("missing"):
+                    print(f"Error: Missing parameters: {', '.join(plan['missing'])}")
+                    print("Please provide more specific task details:")
+                    for param in plan["missing"]:
+                        if param == "temperature_grid":
+                            print("  - Temperature range (e.g., '300-800 K in 100K steps')")
+                        elif param == "supercell":
+                            print("  - Supercell size (e.g., '5x5x5 supercell')")
+                        elif param == "material_id":
+                            print("  - Material ID (e.g., 'mp-149 silicon')")
+                    sys.exit(1)
+            
+            # Save plan if requested
+            if args.save_plan:
+                with open(args.save_plan, "w") as f:
+                    json.dump(plan, f, indent=2)
+                print(f"Plan saved to: {args.save_plan}")
+            
+            # Exit if dry run
+            if args.dry_run:
+                print("\nDry run - plan created but not executed:")
+                print(json.dumps(plan, indent=2))
+                return
+            
+            print("\nExecuting plan...")
+            
+            # Handle workflow execution
+            if plan.get("workflow") == "fetch_then_kappa":
+                try:
+                    # Two-step workflow
+                    print("Starting two-step workflow: fetch then kappa")
+                    
+                    # Step 1: Fetch structure
+                    mp_plan = {
+                        "runner_kind": "MaterialsProject",
+                        "assets": [a for a in plan["assets"] if a["type"] == "Params"],
+                        "params": plan["params"]
+                    }
+                    run_id1 = client.start(mp_plan)
+                    print(f"Step 1 - Materials Project fetch: {run_id1}")
+                    
+                    # Step 2: Run kappa calculation using assets from Step 1
+                    step1_results = client.results(run_id1)
+                    
+                    # Combine System asset from Step 1 with Method/Params from original plan
+                    combined_assets = step1_results["assets"]  # System asset from MaterialsProject
+                    
+                    # Add Method and Params assets from original plan
+                    for asset in plan.get("assets", []):
+                        if asset["type"] in ["Method", "Params"]:
+                            combined_assets.append(asset)
+                    
+                    # If no Method asset found, add a default LAMMPS method
+                    has_method = any(asset["type"] == "Method" for asset in combined_assets)
+                    if not has_method:
+                        from common.ids import generate_id
+                        method_asset = {
+                            "type": "Method",
+                            "id": generate_id("M"),
+                            "payload": {
+                                "family": "MD",
+                                "code": "LAMMPS", 
+                                "model": "LJ",
+                                "device": "CPU"
+                            }
+                        }
+                        combined_assets.append(method_asset)
+                    
+                    # Run LAMMPS calculation
+                    lammps_plan = {
+                        "runner_kind": "LAMMPS",
+                        "assets": combined_assets,
+                        "params": plan["params"]
+                    }
+                    run_id2 = client.start(lammps_plan)
+                    print(f"Step 2 - LAMMPS kappa calculation: {run_id2}")
+                    
+                    final_run_id = run_id2
+                    print(f"\nWorkflow complete! Run IDs: {run_id1}, {run_id2}")
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    raise
+                
+            else:
+                # Single-step execution
+                final_run_id = client.start(plan)
+                print(f"Started run: {final_run_id}")
+            
+            # Get and display results
+            print("\nRetrieving results...")
+            results = client.results(final_run_id)
+            
+            if args.output:
+                with open(args.output, "w") as f:
+                    json.dump(results, f, indent=2)
+                print(f"Results saved to: {args.output}")
+            
+            # Pretty print results summary
+            for asset in results.get("assets", []):
+                if asset["type"] == "Results":
+                    payload = asset["payload"]
+                    if "kappa_W_per_mK" in payload:
+                        print("\nThermal Conductivity Results:")
+                        print(f"Method: {payload.get('method', 'N/A')}")
+                        print(f"Supercell: {payload.get('supercell', 'N/A')}")
+                        print("\nκ(T) values:")
+                        for T, k in zip(payload["T_K"], payload["kappa_W_per_mK"]):
+                            print(f"  {T} K: {k:.2f} W/(m·K)")
     
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

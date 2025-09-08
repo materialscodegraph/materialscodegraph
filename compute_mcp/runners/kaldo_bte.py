@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 import subprocess
+
 try:
     import numpy as np
+    NUMPY_AVAILABLE = True
 except ImportError:
-    # Create minimal numpy replacement for basic functionality
-    class MinimalNumpy:
-        pass
-    np = MinimalNumpy()
+    np = None
+    NUMPY_AVAILABLE = False
 
 from common.schema import Asset, Edge, Run
 from common.ids import asset_id, generate_id
@@ -25,9 +25,28 @@ class KALDoRunner:
     
     def __init__(self):
         self.runner_version = "1.0.0"
+        
+        # Check dependencies
+        if not NUMPY_AVAILABLE:
+            raise ImportError(
+                "NumPy is required for kALDo calculations. Please install: pip install numpy"
+            )
+        
         self.config = get_config()
         self.kaldo_config = self.config.get_kaldo_config()
         self.execution_mode = self.config.get_execution_mode("kaldo")
+        
+        # Additional dependency checks based on execution mode
+        if self.execution_mode == "local":
+            # Check if kALDo is available locally
+            try:
+                import kaldo  # This would be the actual kALDo import
+                self.kaldo_available = True
+            except ImportError:
+                raise ImportError(
+                    "kALDo not available for local execution. "
+                    "Please install kALDo or use Docker execution mode."
+                )
     
     def run(self, run_obj: Run, assets: List[Asset], params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute kALDo BTE calculation"""
@@ -311,18 +330,17 @@ print("kALDo calculation complete!")
         return script
     
     def _generate_force_constants(self, system, tmppath):
-        """Generate/simulate force constants for the system"""
-        # In reality, would run DFT or use ML potential
-        # For simulation, create mock force constants data
+        """Generate force constants for the system using DFT or ML potential"""
+        # This is a placeholder - real implementation would:
+        # 1. Set up DFT calculation (e.g., Quantum ESPRESSO, VASP)
+        # 2. Calculate force constants using finite differences or DFPT
+        # 3. Or use a machine learning potential (CHGNet, M3GNet, etc.)
         
-        n_atoms = len(system["atoms"])
-        fc_data = {
-            "second_order": f"Mock 2nd order FC matrix {n_atoms}x{n_atoms}x3x3",
-            "third_order": f"Mock 3rd order FC tensor for {n_atoms} atoms",
-            "mesh": [20, 20, 20],
-            "primitive_cell": system["lattice"],
-            "atoms": system["atoms"]
-        }
+        raise NotImplementedError(
+            "Force constants generation not implemented. "
+            "This requires DFT calculations or ML potentials. "
+            "Please provide pre-computed force constants as an input asset."
+        )
         
         return fc_data
     
@@ -342,9 +360,21 @@ print("kALDo calculation complete!")
                 "/work/kaldo_script.py"
             ]
             
+            print("=== kALDo Docker Execution ===")
+            print(f"Command: {' '.join(cmd)}")
+            
             result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # Forward stdout/stderr to console
+            if result.stdout:
+                print("kALDo stdout:")
+                print(result.stdout)
+            if result.stderr:
+                print("kALDo stderr:")
+                print(result.stderr)
+            
             if result.returncode != 0:
-                raise RuntimeError(f"kALDo failed: {result.stderr}")
+                raise RuntimeError(f"kALDo failed with return code {result.returncode}")
             
             # Parse output files
             return self._parse_kaldo_output(tmppath, T_K)
@@ -362,13 +392,25 @@ print("kALDo calculation complete!")
             python_exe = local_config.get("python_executable", "python3")
             cmd = f"{python_exe} {script_path}"
             
+            print("=== kALDo Local Execution ===")
+            print(f"Command: {cmd}")
+            print(f"Working directory: {tmppath}")
+            
             result = subprocess.run(
                 cmd, shell=True, cwd=tmppath,
                 capture_output=True, text=True, env=env
             )
             
+            # Forward stdout/stderr to console
+            if result.stdout:
+                print("kALDo stdout:")
+                print(result.stdout)
+            if result.stderr:
+                print("kALDo stderr:")
+                print(result.stderr)
+            
             if result.returncode != 0:
-                raise RuntimeError(f"kALDo failed: {result.stderr}")
+                raise RuntimeError(f"kALDo failed with return code {result.returncode}")
             
             # Parse output files
             return self._parse_kaldo_output(tmppath, T_K)

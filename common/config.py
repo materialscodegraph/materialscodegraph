@@ -71,7 +71,6 @@ class Config:
                 "lammps": {
                     "enabled": True,
                     "execution": {
-                        "mode": "docker",  # Default to docker for portability
                         "docker": {
                             "image": "lammps/lammps:stable",
                             "command": "lmp"
@@ -90,7 +89,6 @@ class Config:
                 "kaldo": {
                     "enabled": True,
                     "execution": {
-                        "mode": "docker"
                     },
                     "defaults": {
                         "k_mesh": [10, 10, 10],
@@ -129,9 +127,15 @@ class Config:
         return self.get_code_config("kaldo")
     
     def get_execution_mode(self, code: str) -> str:
-        """Get execution mode for a code (docker, local, hpc, mock)"""
+        """Get execution mode for a code (docker, local, hpc)"""
         code_config = self.get_code_config(code)
-        return code_config.get("execution", {}).get("mode", "mock")
+        mode = code_config.get("execution", {}).get("mode")
+        if not mode:
+            raise ValueError(
+                f"No execution mode configured for {code}. "
+                f"Please set mode to 'local', 'docker', or 'hpc' in config.json"
+            )
+        return mode
     
     def get_storage_path(self) -> Path:
         """Get base storage path"""

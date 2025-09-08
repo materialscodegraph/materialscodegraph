@@ -3,7 +3,7 @@
     "lammps": {
       "enabled": true,
       "execution": {
-        "mode": "docker",
+        "mode": "local",
         "docker": {
           "image": "lammps/lammps:stable",
           "command": "lmp",
@@ -18,7 +18,7 @@
         },
         "local": {
           "executable": "/usr/local/bin/lammps",
-          "mpi_command": "mpirun -np 4",
+          "mpi_command": "",
           "environment": {
             "OMP_NUM_THREADS": "1"
           }
@@ -44,7 +44,7 @@
       },
       "potentials": {
         "CHGNet": {
-          "enabled": true,
+          "enabled": false,
           "path": "/opt/potentials/chgnet.pth"
         },
         "MACE": {
@@ -116,7 +116,7 @@
     }
   },
   "storage": {
-    "base_path": "/opt/mcg/data",
+    "base_path": "/tmp/mcg/data",
     "persist_runs": true,
     "cleanup_temp_files": true,
     "max_storage_gb": 100
@@ -130,11 +130,11 @@
   "materials_project": {
     "api_key_env": "MP_API_KEY",
     "cache_structures": true,
-    "cache_path": "/opt/mcg/cache/mp"
+    "cache_path": "/tmp/mcg/cache/mp"
   },
   "logging": {
     "level": "INFO",
-    "file": "/opt/mcg/logs/mcg.log",
+    "file": "/tmp/mcg/logs/mcg.log",
     "rotate": true,
     "max_size_mb": 100,
     "backup_count": 5
