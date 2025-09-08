@@ -28,7 +28,10 @@ class InterfacesTools:
             # Extract material ID
             mp_id_match = re.search(r'mp-?\d+', task_lower)
             if mp_id_match:
-                material_id = mp_id_match.group().replace('-', '')
+                material_id = mp_id_match.group()
+                # Ensure proper mp-XXX format
+                if not material_id.startswith('mp-'):
+                    material_id = material_id.replace('mp', 'mp-')
                 params["material_id"] = material_id
                 runner_kind = "MaterialsProject"
                 workflow = "fetch_structure"
