@@ -25,17 +25,17 @@ class SimpleRunner:
     def __init__(self, config_dir: str = None):
         """Initialize with configuration directory"""
         if config_dir is None:
-            config_dir = Path(__file__).parent / "configs"
+            config_dir = Path(__file__).parent.parent / "configs"
         self.config_dir = Path(config_dir)
         self.configs = {}
         self.load_configs()
     
     def load_configs(self):
         """Load all YAML configurations"""
-        for config_file in self.config_dir.glob("*.yaml"):
+        for config_file in self.config_dir.glob("config_*.mcg"):
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
-                name = config_file.stem
+                name = config_file.stem.replace('config_', '')
                 self.configs[name] = config
                 print(f"Loaded {config['name']}")
     

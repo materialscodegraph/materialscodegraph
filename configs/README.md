@@ -1,6 +1,6 @@
 # MCP Runner Configuration Guide
 
-This directory contains YAML configuration files that define how to map natural language to computational methods. Each software tool (LAMMPS, kALDo, Materials Project, etc.) has its own configuration file.
+This directory contains MCG (MaterialsCodeGraph) configuration files that define how to map natural language to computational methods. Each software tool (LAMMPS, kALDo, Materials Project, etc.) has its own `config_[software].mcg` file.
 
 ## Philosophy
 
@@ -12,7 +12,7 @@ Configuration files should be:
 
 ## Configuration Structure
 
-Each YAML file contains these sections:
+Each MCG file contains these sections (using YAML format):
 
 ### 1. Basic Information
 ```yaml
@@ -74,14 +74,14 @@ How to extract results from output files.
 ## Available Software
 
 Current configurations:
-- **lammps.yaml** - Molecular dynamics simulations
-- **kaldo.yaml** - Phonon transport via Boltzmann equation
-- **materials_project.yaml** - Crystal structure database
-- **vasp.yaml** - First-principles electronic structure
+- **config_lammps.mcg** - Molecular dynamics simulations
+- **config_kaldo.mcg** - Phonon transport via Boltzmann equation
+- **config_materials_project.mcg** - Crystal structure database
+- **config_vasp.mcg** - First-principles electronic structure
 
 ## Adding New Software
 
-Create a new YAML file in this directory:
+Create a new MCG file in this directory (e.g., `config_mysoftware.mcg`):
 
 ```yaml
 name: My Software
