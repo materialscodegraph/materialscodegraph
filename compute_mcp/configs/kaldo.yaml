@@ -1,0 +1,79 @@
+# kALDo - Phonon Transport 
+name: kALDo
+description: Boltzmann transport equation for thermal conductivity
+
+# What users might say -> What to do
+understands:
+  bte:
+    aliases: [boltzmann, phonon transport, lattice thermal]
+    method: bte_rta
+    
+  phonons:
+    aliases: [phonon properties, frequencies, lifetimes]
+    method: phonon_analysis
+    
+  kaldo:
+    aliases: [use kaldo, kaldo calculation]
+    method: bte_rta
+
+# What to extract from user input
+extracts:
+  temperature:
+    keywords: [K, kelvin, temperature]
+    examples:
+      - "300K -> 300"
+      - "300-800K -> [300, 400, 500, 600, 700, 800]"
+    default: [300, 400, 500, 600, 700, 800]
+    
+  mesh:
+    keywords: [mesh, grid, k-points, kpts]
+    examples:
+      - "20x20x20 mesh -> [20, 20, 20]"
+      - "mesh 30 -> [30, 30, 30]"
+    default: [20, 20, 20]
+    
+  broadening:
+    keywords: [broadening, smearing, mev]
+    examples:
+      - "1 meV -> 1.0"
+      - "gaussian broadening -> {shape: gauss}"
+      - "lorentzian -> {shape: lorentz}"
+    default: {width: 1.0, shape: gauss}
+    
+  isotopes:
+    keywords: [isotope, isotopic, scattering]
+    examples:
+      - "with isotopes -> true"
+      - "no isotope scattering -> false"
+    default: true
+
+# Execution
+runs_with:
+  docker: kaldo/kaldo:latest
+  local: python3
+
+# Simple template
+generates:
+  bte_rta:
+    needs: [structure, force_constants]
+    script: |
+      import kaldo
+      # Temperature: {temperature}K
+      # Mesh: {mesh}
+      phonons = kaldo.Phonons(
+          structure=structure,
+          kpts={mesh},
+          temperature={temperature}
+      )
+      conductivity = kaldo.Conductivity(phonons, method='rta')
+      kappa = conductivity.kappa
+
+# Output
+parses:
+  bte_rta:
+    file: results.json
+    gets:
+      - kappa          # W/m/K
+      - frequencies    # THz
+      - lifetimes      # ps
+      - velocities     # km/s

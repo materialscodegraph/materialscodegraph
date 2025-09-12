@@ -1,0 +1,86 @@
+# LAMMPS - Molecular Dynamics Simulations
+name: LAMMPS
+description: Molecular dynamics for thermal conductivity
+
+# What users might say -> What method to use
+understands:
+  thermal conductivity:
+    aliases: [kappa, heat transport, thermal transport]
+    method: green_kubo
+    
+  green kubo:
+    aliases: [green-kubo, gk, heat flux correlation]
+    method: green_kubo
+    
+  non-equilibrium:
+    aliases: [nemd, muller-plathe, direct method]
+    method: nemd
+
+# What parameters to look for in natural language
+extracts:
+  temperature:
+    keywords: [K, kelvin, temperature, temp]
+    examples:
+      - "300K -> 300"
+      - "300 to 800 K -> [300, 400, 500, 600, 700, 800]"
+      - "300K, 400K, 500K -> [300, 400, 500]"
+    default: [300, 400, 500, 600, 700, 800]
+    
+  supercell:
+    keywords: [supercell, cell, size]
+    examples:
+      - "10x10x10 -> [10, 10, 10]"
+      - "20 20 20 supercell -> [20, 20, 20]"
+    default: [10, 10, 10]
+    
+  timestep:
+    keywords: [timestep, dt, fs, femtosecond]
+    examples:
+      - "0.5 fs -> 0.5"
+      - "timestep 1.0 -> 1.0"
+    default: 1.0
+    
+  simulation_time:
+    keywords: [ps, picosecond, time, duration]
+    examples:
+      - "100 ps equilibration -> {equil: 100}"
+      - "500 ps production -> {prod: 500}"
+    default: {equil: 100, prod: 500}
+
+# How to run the code
+runs_with:
+  local: /usr/local/bin/lammps
+  docker: lammps/lammps:stable
+  
+# What the code needs (template simplified)
+generates:
+  green_kubo:
+    needs: [structure, temperature, supercell]
+    script: |
+      # LAMMPS Green-Kubo at {temperature}K
+      units metal
+      read_data structure.data
+      
+      velocity all create {temperature} 12345
+      fix nvt all nvt temp {temperature} {temperature} 100
+      
+      # Equilibration
+      run {equil_steps}
+      
+      # Production with heat flux
+      compute flux all heat/flux
+      fix correlate all ave/correlate
+      run {prod_steps}
+
+# What to extract from output
+parses:
+  green_kubo:
+    file: hfacf.dat
+    gets:
+      - thermal_conductivity -> kappa
+      - convergence -> converged
+      
+# Simple validation
+validates:
+  temperature: 1 to 10000  # K
+  supercell: 5 to 50       # repeat units
