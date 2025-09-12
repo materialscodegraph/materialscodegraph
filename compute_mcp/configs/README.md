@@ -1,78 +1,91 @@
-# Simplified Configuration System
+# MCP Runner Configuration Guide
+
+This directory contains YAML configuration files that define how to map natural language to computational methods. Each software tool (LAMMPS, kALDo, Materials Project, etc.) has its own configuration file.
 
 ## Philosophy
 
-The configuration files should be:
+Configuration files should be:
 - **Intuitive**: Read like documentation, not code
-- **Natural**: Use plain English, not regex
-- **Simple**: Flat structure, clear mappings
+- **Natural**: Use plain English, not regex patterns
+- **Simple**: Flat structure with clear mappings
 - **Minimal**: Only specify what's different from defaults
 
-## Structure
+## Configuration Structure
 
-Each YAML file has these simple sections:
+Each YAML file contains these sections:
 
-### 1. Basic Info
+### 1. Basic Information
 ```yaml
 name: Software Name
-description: What it does
+description: What this software does
 ```
 
-### 2. Understanding Natural Language
+### 2. Natural Language Understanding
 ```yaml
 understands:
   thermal conductivity:
     aliases: [kappa, heat transport]
     method: green_kubo
 ```
-This says: "When user mentions 'thermal conductivity' (or 'kappa' or 'heat transport'), use the green_kubo method"
+This maps user phrases to specific methods. When someone says "thermal conductivity", "kappa", or "heat transport", the system knows to use the `green_kubo` method.
 
-### 3. Extracting Parameters
+### 3. Parameter Extraction
 ```yaml
 extracts:
   temperature:
     keywords: [K, kelvin]
     examples:
-      - "300K" -> 300
-      - "300 to 800K" -> [300, 400, 500, 600, 700, 800]
+      - "300K -> 300"
+      - "300-800K -> [300, 400, 500, 600, 700, 800]"
     default: 300
 ```
-This says: "Look for 'K' or 'kelvin', extract numbers like these examples, default to 300"
+This tells the system how to find and extract parameters from natural language. The examples show the system what input patterns to expect and how to convert them.
 
-### 4. Running the Code
+### 4. Execution Configuration
 ```yaml
 runs_with:
-  docker: image_name
+  docker: software/image:latest
   local: /path/to/executable
 ```
+Simple execution modes - no complex nested configuration.
 
-### 5. Generating Scripts
+### 5. Script Generation
 ```yaml
 generates:
   method_name:
-    needs: [what_it_needs]
+    needs: [structure, temperature]
     script: |
-      The actual script with {placeholders}
+      # Simple template with {placeholders}
+      run_software --temp {temperature}
 ```
+Templates for generating input scripts with placeholder substitution.
 
-### 6. Parsing Output
+### 6. Output Parsing
 ```yaml
 parses:
   method_name:
     file: output.dat
     gets:
       - thermal_conductivity -> kappa
+      - convergence -> converged
 ```
+How to extract results from output files.
 
-## Examples
+## Available Software
 
-### Adding a New Software
+Current configurations:
+- **lammps.yaml** - Molecular dynamics simulations
+- **kaldo.yaml** - Phonon transport via Boltzmann equation
+- **materials_project.yaml** - Crystal structure database
+- **vasp.yaml** - First-principles electronic structure
 
-Create `configs_v2/new_software.yaml`:
+## Adding New Software
+
+Create a new YAML file in this directory:
 
 ```yaml
 name: My Software
-description: Does something cool
+description: What it calculates
 
 understands:
   my calculation:
@@ -80,10 +93,10 @@ understands:
     method: main_method
 
 extracts:
-  my_param:
+  my_parameter:
     keywords: [param, value]
     examples:
-      - "param 10" -> 10
+      - "param 10 -> 10"
     default: 5
 
 runs_with:
@@ -92,7 +105,7 @@ runs_with:
 generates:
   main_method:
     script: |
-      mysoftware --param {my_param}
+      mysoftware --param {my_parameter}
 
 parses:
   main_method:
@@ -101,7 +114,32 @@ parses:
       - result
 ```
 
-### Using Material Shortcuts
+## Testing Your Configuration
+
+Test natural language understanding:
+
+```python
+from compute_mcp.simple_runner import plan_from_nl
+
+# Test your configuration
+result = plan_from_nl("calculate thermal conductivity of silicon at 300K")
+print(result)
+```
+
+Expected output:
+```python
+{
+  "runner": "lammps",
+  "method": "green_kubo", 
+  "params": {"temperature": 300, "material_name": "mp-149"},
+  "matched_on": "thermal conductivity"
+}
+```
+
+## Common Patterns
+
+### Material Shortcuts
+Allow users to say "silicon" instead of "mp-149":
 
 ```yaml
 extracts:
@@ -109,101 +147,67 @@ extracts:
     shortcuts:
       silicon: mp-149
       graphene: mp-1040425
+      diamond: mp-66
 ```
 
-Now users can say "get silicon" instead of "get mp-149"
+### Multiple Aliases
+Support different ways to say the same thing:
 
-### Temperature Ranges
-
-```yaml
-extracts:
-  temperature:
-    keywords: [K, kelvin]
-    examples:
-      - "300K" -> 300
-      - "300-800K" -> [300, 400, 500, 600, 700, 800]
-      - "300K, 500K, 700K" -> [300, 500, 700]
-```
-
-The system learns from examples how to parse different formats.
-
-## Testing
-
-Test natural language understanding:
-
-```python
-from compute_mcp.simple_runner import plan_from_nl
-
-# Test your natural language
-result = plan_from_nl("calculate thermal conductivity of silicon at 300K")
-print(result)
-# Output:
-# {
-#   "runner": "lammps",
-#   "method": "green_kubo",
-#   "params": {"temperature": 300, "material_id": "mp-149"}
-# }
-```
-
-## Tips
-
-1. **Start simple**: Add only what you need
-2. **Use examples**: Show the system what to expect
-3. **Provide defaults**: Most users want standard settings
-4. **Test incrementally**: Add one feature at a time
-5. **Keep it readable**: Someone should understand it without documentation
-
-## Common Patterns
-
-### Multiple Ways to Say Something
 ```yaml
 understands:
   thermal conductivity:
     aliases: [kappa, k, heat transport, thermal transport]
 ```
 
-### Common Units
-```yaml
-extracts:
-  time:
-    keywords: [ps, picosecond, fs, femtosecond]
-    examples:
-      - "100 ps" -> 100
-      - "0.5 fs" -> 0.5
-```
+### Temperature Ranges
+Handle different temperature input formats:
 
-### Grids and Meshes
-```yaml
-extracts:
-  mesh:
-    keywords: [mesh, grid, points]
-    examples:
-      - "20x20x20" -> [20, 20, 20]
-      - "mesh 30" -> [30, 30, 30]
-```
-
-## Migration from Complex Config
-
-Old (complex):
-```yaml
-nl_patterns:
-  parameters:
-    temperature:
-      patterns:
-        - pattern: '(\d+)\s*(?:-|to|–)\s*(\d+)\s*[kK]'
-          type: range
-          extract:
-            start: $1
-            end: $2
-```
-
-New (simple):
 ```yaml
 extracts:
   temperature:
-    keywords: [K]
+    keywords: [K, kelvin]
     examples:
-      - "300-800K" -> [300, 400, 500, 600, 700, 800]
+      - "300K -> 300"
+      - "300-800K -> [300, 400, 500, 600, 700, 800]" 
+      - "300K, 500K, 700K -> [300, 500, 700]"
 ```
 
-The new way is clearer and easier to maintain!
+### Grid Specifications
+Extract mesh/grid parameters:
+
+```yaml
+extracts:
+  mesh:
+    keywords: [mesh, grid, k-points]
+    examples:
+      - "20x20x20 mesh -> [20, 20, 20]"
+      - "mesh 30 -> [30, 30, 30]"
+```
+
+## Best Practices
+
+1. **Start simple** - Add only essential features first
+2. **Use examples** - Show the system concrete input/output pairs
+3. **Provide defaults** - Most users want standard settings
+4. **Test incrementally** - Verify each addition works
+5. **Keep it readable** - Others should understand without explanation
+
+## Parameter Types
+
+The system handles various parameter types automatically:
+- **Numbers**: `"300K -> 300"` 
+- **Arrays**: `"10x10x10 -> [10, 10, 10]"`
+- **Ranges**: `"300-800K -> [300, 400, 500, 600, 700, 800]"`
+- **Objects**: `"gaussian broadening -> {shape: gauss}"`
+- **Booleans**: `"with isotopes -> true"`
+
+## Validation
+
+Simple validation rules:
+```yaml
+validates:
+  temperature: 1 to 10000  # Kelvin
+  mesh: 5 to 100          # grid points
+```
+
+The configuration system learns from your examples and applies that knowledge to new inputs automatically.
