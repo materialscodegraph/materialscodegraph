@@ -55,45 +55,47 @@ class InterfacesTools:
         workflow = None
         missing = []
 
-        # First, extract ALL possible parameters from ALL configurations
-        # This ensures we capture material_id, temperature, etc. regardless of which runner matches first
-        all_param_mappings = {}
+        # Build parameter schema from all configurations for AI
+        all_parameters = set()
         for config_name, config in self.configs.items():
-            param_mapping = config.get('parameter_mapping', {})
-            for param_key, param_aliases in param_mapping.items():
-                if param_key not in all_param_mappings:
-                    all_param_mappings[param_key] = param_aliases
+            all_parameters.update(config.get('required_parameters', []))
+            all_parameters.update(config.get('optional_parameters', []))
 
-        # Extract parameters using combined mapping from all configurations
-        self._extract_parameters_from_task(task_lower, params, all_param_mappings, missing)
+        # Create parameter mapping for AI (simple mapping - parameter name to itself)
+        all_param_mappings = {param: [param] for param in all_parameters}
+
+        # Extract parameters using AI with all available parameters
+        self._extract_parameters_from_task(nl_task, params, all_param_mappings, missing)
 
         # Now find the best matching configuration for execution
         best_match = None
         best_score = 0
 
         for config_name, config in self.configs.items():
-            understands = config.get('understands', {})
+            capabilities = config.get('capabilities', [])
             score = 0
-            matched_keywords = []
+            matched_capabilities = []
 
-            # Check each capability this config understands
-            for capability, spec in understands.items():
-                keywords = spec.get('keywords', [])
-                aliases = spec.get('aliases', [])
+            # Check if task matches any of this runner's capabilities
+            for capability in capabilities:
+                capability_words = capability.lower().replace('_', ' ').split()
 
-                # Check if task matches any keywords or aliases
-                all_terms = keywords + aliases + [capability]
-                for term in all_terms:
-                    if term.lower() in task_lower:
-                        score += 1
-                        matched_keywords.append(term)
+                # Check if all capability words appear in task
+                if all(word in task_lower for word in capability_words):
+                    score += len(capability_words)
+                    matched_capabilities.append(capability)
+
+                # Also check for partial matches
+                elif any(word in task_lower for word in capability_words):
+                    score += 1
+                    matched_capabilities.append(capability)
 
             if score > best_score:
                 best_score = score
                 best_match = {
                     'config_name': config_name,
                     'config': config,
-                    'matched_keywords': matched_keywords,
+                    'matched_capabilities': matched_capabilities,
                     'score': score
                 }
 
@@ -101,8 +103,12 @@ class InterfacesTools:
             runner_kind = best_match['config_name']
             config = best_match['config']
 
-            # Determine workflow based on configuration's method resolution
-            workflow = self._determine_workflow(task_lower, config, params)
+            # Determine workflow method from config
+            matched_capability = best_match['matched_capabilities'][0] if best_match['matched_capabilities'] else None
+            if matched_capability:
+                workflow = config.get('methods', {}).get(matched_capability, matched_capability)
+            else:
+                workflow = list(config.get('methods', {}).values())[0] if config.get('methods') else "default"
 
             # Check if we need multiple runners for a workflow based on extracted parameters
             workflow = self._check_multi_step_workflow(task_lower, runner_kind, params, workflow)

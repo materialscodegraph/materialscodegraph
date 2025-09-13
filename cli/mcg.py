@@ -549,68 +549,53 @@ def _execute_multi_step_workflow(client, plan: dict) -> list:
     return run_ids
 
 def _parse_workflow_definition(workflow: str) -> list:
-    """Parse workflow name into sequence of runners using MCG configurations"""
+    """Parse workflow name into sequence of runners"""
+
+    # Simple workflow mappings for common patterns
+    workflow_mappings = {
+        "fetch_then_kappa": ["MaterialsProject", "LAMMPS"],
+        "fetch_then_thermal": ["MaterialsProject", "LAMMPS"],
+        "mp_then_lammps": ["MaterialsProject", "LAMMPS"],
+        "materialsproject_then_lammps": ["MaterialsProject", "LAMMPS"],
+        "green_kubo": ["LAMMPS"],
+        "fetch_material": ["MaterialsProject"]
+    }
+
+    workflow_lower = workflow.lower()
+
+    if workflow_lower in workflow_mappings:
+        return workflow_mappings[workflow_lower]
+
+    # Fallback: try to parse from available configs
     from pathlib import Path
-
     configs_dir = Path(__file__).parent.parent / "configs"
-    runners = []
-    workflow_parts = workflow.lower().split("_")
+    available_configs = []
 
-    # Load runner capabilities from JSON config files
-    runner_capabilities = {}
     for config_file in configs_dir.glob("*.json"):
         try:
             with open(config_file, 'r') as f:
                 config = json.load(f)
-
-            if not config or 'name' not in config:
-                continue
-
-            runner_name = config['name']
-            understands = config.get('understands', {})
-
-            # Build keyword mapping for this runner
-            keywords = []
-            for capability, spec in understands.items():
-                keywords.extend(spec.get('keywords', []))
-                keywords.extend(spec.get('aliases', []))
-                keywords.append(capability.lower())
-
-            runner_capabilities[runner_name] = keywords
-
-        except Exception:
+            if config and 'name' in config:
+                available_configs.append(config['name'])
+        except:
             continue
 
-    # Load workflow mappings from config files
-    if not runner_capabilities:
-        # Try to determine from available configs
-        available_configs = [f.stem for f in configs_dir.glob("*.json")]
-        if len(available_configs) >= 2:
-            # Default two-step workflow uses all available configs
-            return available_configs
-        else:
-            # Fallback to single config
-            return available_configs
+    # If workflow contains "then", try to match parts to available configs
+    if "then" in workflow_lower:
+        workflow_parts = [part.strip() for part in workflow_lower.split("_") if part != "then"]
+        matched_runners = []
 
-    # Match workflow parts to runners based on their capabilities
-    for part in workflow_parts:
-        if part == "then":
-            continue
+        for part in workflow_parts:
+            for runner_name in available_configs:
+                if part in runner_name.lower() or runner_name.lower() in part:
+                    matched_runners.append(runner_name)
+                    break
 
-        best_runner = None
-        max_matches = 0
+        if matched_runners:
+            return matched_runners
 
-        # Find runner with most keyword matches for this workflow part
-        for runner_name, keywords in runner_capabilities.items():
-            matches = sum(1 for keyword in keywords if part in keyword.lower() or keyword.lower() in part)
-            if matches > max_matches:
-                max_matches = matches
-                best_runner = runner_name
-
-        if best_runner:
-            runners.append(best_runner)
-
-    return runners
+    # Default fallback
+    return available_configs if available_configs else ["LAMMPS"]
 
 if __name__ == "__main__":
     # Add app directory to path for imports
