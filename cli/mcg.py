@@ -38,7 +38,13 @@ class MCGClient:
             params=plan.get("params", {})
         )
         
-        return run["id"]
+        # Handle both Run objects and dictionaries
+        if hasattr(run, 'id'):
+            return run.id
+        elif isinstance(run, dict) and 'id' in run:
+            return run["id"]
+        else:
+            return str(run)
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Check run status"""
@@ -132,22 +138,11 @@ class ComputeMCP:
             stored_assets = memory.get_assets(asset_ids)
             assets = [Asset.from_dict(a) for a in stored_assets if a is not None]
         
-        # Execute appropriate runner
+        # Execute using config-based runner
         try:
-            if runner_kind == "MaterialsProject":
-                from compute_mcp.runners.materials_project import MaterialsProjectRunner
-                runner = MaterialsProjectRunner()
-                result = runner.run(run_obj, assets, params)
-            elif runner_kind == "LAMMPS":
-                from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
-                runner = LAMMPSKappaGKRunner()
-                result = runner.run(run_obj, assets, params)
-            elif runner_kind == "kALDo":
-                from compute_mcp.runners.kaldo_bte import KALDoRunner
-                runner = KALDoRunner()
-                result = runner.run(run_obj, assets, params)
-            else:
-                raise ValueError(f"Unknown runner kind: {runner_kind}")
+            from compute_mcp.generic_runner import GenericRunner
+            runner = GenericRunner()
+            result = runner.run(runner_kind, run_obj, assets, params)
             
             # Store results in shared memory  
             if result.get("assets"):
@@ -155,7 +150,7 @@ class ComputeMCP:
             if result.get("edges"):
                 memory.link(result["edges"])  # Already dictionaries
             
-            return result["run"]
+            return result.get("run", result)
             
         except Exception as e:
             run_obj.status = "error"

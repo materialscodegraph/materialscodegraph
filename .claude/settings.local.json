@@ -5,9 +5,16 @@
       "Bash(python:*)",
       "Bash(tree:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(/usr/local/Cellar/lammps/20250722-update1/bin/lmp_serial -help)",
+      "Bash(pip3 install:*)",
+      "Bash(brew install:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/usr/local/Cellar/lammps/20250722-update1/bin"
+    ]
   }
 }

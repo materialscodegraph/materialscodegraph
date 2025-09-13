@@ -10,9 +10,7 @@ from mcp.types import Tool, TextContent
 
 from common.schema import Asset, Edge, Run
 from common.ids import run_id
-from compute_mcp.runners.materials_project import MaterialsProjectRunner
-from compute_mcp.runners.lammps_kappa_gk import LAMMPSKappaGKRunner
-from compute_mcp.runners.kaldo_bte import KALDoRunner
+from compute_mcp.generic_runner import GenericRunner
 
 # Create MCP server
 app = Server("compute-mcp")
@@ -93,19 +91,11 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Note: In real implementation, would fetch assets from Memory MCP
             # For now, create placeholder assets
             assets = []
-            
-            if runner_kind == "MaterialsProject":
-                runner = MaterialsProjectRunner()
-                results = runner.run(run, assets, params)
-            elif runner_kind == "LAMMPS":
-                runner = LAMMPSKappaGKRunner()
-                results = runner.run(run, assets, params)
-            elif runner_kind == "kALDo":
-                runner = KALDoRunner()
-                results = runner.run(run, assets, params)
-            else:
-                raise ValueError(f"Unknown runner kind: {runner_kind}")
-            
+
+            # Use the generic runner with zero domain knowledge
+            runner = GenericRunner()
+            results = runner.run(runner_kind, run, assets, params)
+
             run_results[run.id] = results
             active_runs[run.id] = results["run"]
             
