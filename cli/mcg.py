@@ -270,6 +270,7 @@ Examples:
     plan_parser = subparsers.add_parser("plan", help="Create execution plan from task")
     plan_parser.add_argument("task", help="Natural language task description")
     plan_parser.add_argument("-o", "--output", help="Save plan to file")
+    plan_parser.add_argument("--save", action="store_true", help="Save plan to plan.json (shortcut for -o plan.json)")
     
     # Start command
     start_parser = subparsers.add_parser("start", help="Start computation")
@@ -320,10 +321,21 @@ Examples:
                         print("  - Material ID (e.g., 'mp-149')")
             
             # Save or print plan
-            if args.output:
-                with open(args.output, "w") as f:
+            print("\n" + "="*50)
+            print("📋 GENERATED PLAN")
+            print("="*50)
+
+            # Determine output file
+            output_file = args.output
+            if args.save and not output_file:
+                output_file = "plan.json"
+
+            if output_file:
+                with open(output_file, "w") as f:
                     json.dump(plan, f, indent=2)
-                print(f"Plan saved to {args.output}")
+                print(f"💾 Plan saved to {output_file}")
+                print(f"📄 Plan content:")
+                print(json.dumps(plan, indent=2))
             else:
                 print(json.dumps(plan, indent=2))
         

@@ -1,9 +1,15 @@
 """Planning and explanation tools for natural language interactions"""
 import re
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+
+from dotenv import load_dotenv
+import anthropic
+
+load_dotenv()
 
 
 from common.schema import Asset, Edge
@@ -202,75 +208,97 @@ class InterfacesTools:
         
         return "\n".join(explanation)
 
-    def _extract_parameters_from_task(self, task_lower: str, params: Dict, param_mapping: Dict, missing: List):
-        """Extract parameters from task using configuration's parameter mapping"""
+    def _extract_parameters_from_task(self, task: str, params: Dict, param_mapping: Dict, missing: List):
+        """Extract parameters from task using AI-powered parsing"""
 
-        # Material ID extraction (generic pattern)
-        material_patterns = [
-            r'mp-?\d+',  # Materials Project IDs
-            r'\b[A-Z][a-z]?\d*\b',  # Chemical formulas like Si, Al2O3
-        ]
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
 
-        for pattern in material_patterns:
-            match = re.search(pattern, task_lower, re.IGNORECASE)
-            if match:
-                material_id = match.group()
-                if 'material_id' in param_mapping:
-                    params[param_mapping['material_id'][0]] = material_id
-                    break
+        # Build parameter schema from all available mappings
+        param_schema = {}
+        for param_key, aliases in param_mapping.items():
+            param_schema[param_key] = {
+                'aliases': aliases,
+                'description': self._get_parameter_description(param_key)
+            }
 
-        # Temperature extraction
-        temp_patterns = [
-            (r'(\d+)\s*(?:-|to|–)\s*(\d+)\s*k', 'range'),  # Range like "300-800K"
-            (r'(\d+)\s*k(?:elvin)?', 'single'),  # Single temp like "300K"
-        ]
+        prompt = f"""Extract simulation parameters from this task description:
 
-        for pattern, pattern_type in temp_patterns:
-            if 'temperature' in param_mapping:
-                temp_aliases = param_mapping['temperature']
-                matches = re.findall(pattern, task_lower)
-                if matches:
-                    if pattern_type == 'range' and len(matches[0]) == 2:
-                        T_start, T_end = int(matches[0][0]), int(matches[0][1])
-                        temp_values = list(range(T_start, T_end + 1, 100))
-                    else:
-                        temp_values = [int(m) if isinstance(m, str) else int(m[0]) for m in matches]
+"{task}"
 
-                    params[temp_aliases[0]] = temp_values
-                    break
-        else:
-            if 'temperature' in param_mapping:
-                missing.append('temperature')
+Available parameters to extract:
+{json.dumps(param_schema, indent=2)}
 
-        # Supercell extraction
-        supercell_patterns = [
-            r'(\d+)x(\d+)x(\d+)',  # Format like "20x20x20"
-            r'[\(\[]?\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*[\)\]]?'  # Format like "[20, 20, 20]"
-        ]
+Return ONLY a JSON object with the extracted parameters. Use the first alias as the key name.
+For temperature ranges, return as a list of values (e.g., [300, 400, 500] for 300-500K).
+For supercells like "20x20x20", return as [20, 20, 20].
+If a parameter is not found, omit it from the response.
 
-        if 'supercell' in param_mapping:
-            supercell_aliases = param_mapping['supercell']
-            for pattern in supercell_patterns:
-                match = re.search(pattern, task_lower)
+Example response format:
+{{
+  "material_id": "mp-149",
+  "temperature": [300, 400, 500],
+  "supercell": [20, 20, 20]
+}}"""
+
+        try:
+            print("🤖 AI Parameter Extraction")
+            print(f"📝 Task: {task}")
+            print(f"🔍 Available parameters: {list(param_mapping.keys())}")
+
+            message = client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text.strip()
+            print(f"🔮 AI Response: {response_text}")
+
+            extracted_params = json.loads(response_text)
+            print(f"✅ Parsed parameters: {extracted_params}")
+
+            # Update params dict with extracted parameters
+            for key, value in extracted_params.items():
+                params[key] = value
+                print(f"  📥 {key}: {value}")
+
+            print(f"🎯 Total extracted: {len(extracted_params)} parameters")
+
+        except Exception as e:
+            print(f"AI parameter extraction failed, falling back to basic parsing: {e}")
+            # Simple fallback for critical parameters
+            task_lower = task.lower()
+
+            # Basic material ID extraction
+            if 'material_id' in param_mapping:
+                import re
+                match = re.search(r'mp-?\d+', task_lower)
                 if match:
-                    params[supercell_aliases[0]] = [int(match.group(1)), int(match.group(2)), int(match.group(3))]
-                    break
-            else:
-                missing.append('supercell')
+                    params[param_mapping['material_id'][0]] = match.group()
 
-        # Generic numeric parameter extraction for timestep, etc.
-        numeric_patterns = {
-            'timestep': r'timestep[:\s]*(\d+\.?\d*)\s*fs',
-            'equilibration': r'equil[^\d]*(\d+)\s*ps',
-            'production': r'prod[^\d]*(\d+)\s*ps',
+            # Basic temperature extraction
+            if 'temperature' in param_mapping:
+                match = re.search(r'(\d+)(?:\s*-\s*(\d+))?\s*k', task_lower)
+                if match:
+                    if match.group(2):  # Range
+                        start, end = int(match.group(1)), int(match.group(2))
+                        params[param_mapping['temperature'][0]] = list(range(start, end + 1, 100))
+                    else:  # Single value
+                        params[param_mapping['temperature'][0]] = [int(match.group(1))]
+
+    def _get_parameter_description(self, param_key: str) -> str:
+        """Get human-readable description for parameter"""
+        descriptions = {
+            'material_id': 'Material identifier (e.g., mp-149, silicon)',
+            'temperature': 'Temperature in Kelvin (single value or range)',
+            'supercell': 'Supercell dimensions as three integers [x, y, z]',
+            'timestep': 'Timestep in femtoseconds',
+            'equilibration_time': 'Equilibration time in picoseconds',
+            'production_time': 'Production time in picoseconds',
+            'formula': 'Chemical formula (e.g., Si, Al2O3)',
+            'property': 'Physical property to calculate'
         }
-
-        for param_key, pattern in numeric_patterns.items():
-            if param_key in param_mapping:
-                match = re.search(pattern, task_lower)
-                if match:
-                    param_aliases = param_mapping[param_key]
-                    params[param_aliases[0]] = float(match.group(1))
+        return descriptions.get(param_key, f'Parameter: {param_key}')
 
     def _determine_workflow(self, task_lower: str, config: Dict, params: Dict) -> str:
         """Determine workflow using configuration's method resolution"""

@@ -4,7 +4,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#testing)
 
-> A minimal, production-ready implementation of MaterialsCodeGraph using Model Context Protocols (MCPs) for computational materials science workflows with full lineage tracking.
+> An AI-powered computational materials science platform using natural language to orchestrate LAMMPS, MaterialsProject, and other simulation tools with full provenance tracking.
 
 ## Table of Contents
 
@@ -21,35 +21,39 @@
 
 ## Overview
 
-MaterialsCodeGraph (MCG) enables **natural language driven computational workflows** for materials science. Simply describe what you want to calculate in plain English, and MCG handles the rest - from fetching crystal structures to running simulations to explaining results.
+MaterialsCodeGraph (MCG) enables **AI-powered computational workflows** for materials science. Simply describe what you want to calculate in plain English, and MCG's AI system intelligently parses parameters, selects appropriate simulation tools, and executes complex workflows.
 
 ```bash
-# Example: One command to get thermal conductivity
-mcg plan "Calculate thermal conductivity for silicon using LAMMPS at 300-800K" > plan.json
+# Example: AI-powered thermal conductivity calculation
+python -m cli.mcg plan "Calculate thermal conductivity for mp-149 silicon at 300-500K using LAMMPS with 20x20x20 supercell" --save
+python -m cli.mcg start --plan plan.json
 ```
 
 ### Why MaterialsCodeGraph?
 
+- **🤖 AI-Powered Parsing**: Claude AI intelligently extracts simulation parameters from natural language
 - **🗣️ Natural Language Interface**: No need to learn complex APIs or simulation inputs
-- **🔄 Multiple Methods**: Compare LAMMPS MD with kALDo BTE in the same framework
-- **📊 Full Provenance**: Every calculation step is tracked for reproducibility
-- **🚀 Production Ready**: Docker support, comprehensive testing, extensible architecture
+- **🔄 Multiple Methods**: Compare LAMMPS MD with MaterialsProject data in unified workflows
+- **📊 Full Provenance**: Every calculation step is tracked with immutable lineage
+- **⚡ Smart Configuration**: Zero hardcoding - everything driven by JSON configuration files
 
 ## Features
 
-- **Natural Language Planning** - Parse tasks like "Calculate κ for mp-149 silicon"
-- **Multi-Method Support** - LAMMPS Green-Kubo and kALDo BTE calculations
-- **Materials Project Integration** - Automatic structure fetching by material ID
-- **Complete Lineage Tracking** - Immutable provenance with content-based hashing
-- **Rich Analysis** - Thermal conductivity tensors, phonon properties, trend analysis
-- **Extensible Architecture** - Easy to add VASP, Quantum ESPRESSO, or other codes
+- **🤖 AI-Powered Parameter Extraction** - Claude AI intelligently parses complex natural language descriptions
+- **📋 Smart Planning with Logging** - Full transparency into AI decision-making process
+- **🔧 Multi-Method Support** - LAMMPS Green-Kubo simulations and MaterialsProject data integration
+- **📊 Materials Project Integration** - Automatic structure fetching and property lookup
+- **🔗 Complete Lineage Tracking** - Immutable provenance with content-based hashing
+- **⚙️ Configuration-Driven** - Zero hardcoded tool knowledge, everything in JSON configs
+- **🚀 Extensible Architecture** - Easy to add new simulation tools via configuration
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Materials Project API key ([get one free](https://materialsproject.org/api))
+- Anthropic API key ([get one here](https://console.anthropic.com/))
+- Materials Project API key ([get one free](https://materialsproject.org/api)) - optional for MaterialsProject workflows
 
 ### Installation
 
@@ -58,26 +62,43 @@ mcg plan "Calculate thermal conductivity for silicon using LAMMPS at 300-800K" >
 git clone https://github.com/materialscodegraph/materialscodegraph.git
 cd materialscodegraph
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (includes AI packages)
+pip install anthropic python-dotenv
 
-# Set your Materials Project API key
-export MP_API_KEY="your_api_key_here"
+# Set up API keys in .env file
+echo "ANTHROPIC_API_KEY=your_anthropic_key_here" > .env
+echo "MP_API_KEY=your_materials_project_key_here" >> .env
 ```
 
 ### Your First Calculation
 
-Calculate thermal conductivity of silicon in 3 steps:
+Calculate thermal conductivity of silicon with AI-powered parsing:
 
 ```bash
-# 1. Plan the calculation using natural language
-python -m cli.mcg plan "Calculate thermal conductivity for mp-149 silicon at 300-800K using LAMMPS"
+# 1. Plan the calculation using natural language (AI parses everything!)
+python -m cli.mcg plan "Calculate thermal conductivity for mp-149 silicon at 300-500K using LAMMPS with 20x20x20 supercell" --save
 
 # 2. Execute the workflow
 python -m cli.mcg start --plan plan.json
 
 # 3. View results
 python -m cli.mcg results R12345678
+```
+
+**See the AI in action:**
+```
+🤖 AI Parameter Extraction
+📝 Task: calculate thermal conductivity for mp-149 silicon at 300-500k using lammps with 20x20x20 supercell
+🔍 Available parameters: ['material_id', 'formula', 'property', 'temperature', 'supercell', ...]
+🔮 AI Response: {
+  "material_id": "mp-149",
+  "formula": "silicon",
+  "property": "thermal conductivity",
+  "temperature": [300, 400, 500],
+  "supercell": [20, 20, 20]
+}
+✅ Parsed parameters: 5 parameters extracted
+🎯 Total extracted: 5 parameters
 ```
 
 Output:
@@ -134,36 +155,51 @@ python run_tests.py
 
 ### Basic Usage
 
-MCG uses a simple command-line interface with five main commands:
+MCG uses an AI-powered command-line interface with five main commands:
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `plan` | Create workflow from natural language | `python -m cli.mcg plan "Calculate κ for silicon"` |
+| `plan` | AI-powered workflow creation | `python -m cli.mcg plan "Calculate κ for silicon" --save` |
 | `start` | Execute a workflow plan | `python -m cli.mcg start --plan plan.json` |
 | `status` | Check calculation progress | `python -m cli.mcg status R12345678` |
 | `results` | Retrieve calculation results | `python -m cli.mcg results R12345678` |
 | `explain` | Get human-readable explanation | `python -m cli.mcg explain R12345678` |
 
+### Plan Command Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--save` | Save to plan.json | `python -m cli.mcg plan "task" --save` |
+| `-o FILE` | Save to custom file | `python -m cli.mcg plan "task" -o my_plan.json` |
+| *(none)* | Show output only | `python -m cli.mcg plan "task"` |
+
 ### Natural Language Examples
 
-MCG understands various ways to describe calculations:
+MCG's AI system understands various ways to describe calculations:
 
 ```bash
-# Basic thermal conductivity
-python -m cli.mcg plan "Calculate thermal conductivity for silicon"
+# Basic thermal conductivity (AI infers reasonable defaults)
+python -m cli.mcg plan "Calculate thermal conductivity for silicon" --save
 
-# Specify temperature range
-python -m cli.mcg plan "Get κ for mp-149 from 300K to 800K"
+# Specify temperature range (AI parses "300K to 800K")
+python -m cli.mcg plan "Get κ for mp-149 from 300K to 800K" --save
 
-# Choose specific method
-python -m cli.mcg plan "Use LAMMPS Green-Kubo for silicon thermal conductivity at 300-800K"
+# Complex specifications (AI extracts all parameters)
+python -m cli.mcg plan "Study heat transport in aluminum oxide at room temperature and 800K with medium simulation cell" --save
 
-# Use Boltzmann Transport Equation
-python -m cli.mcg plan "Calculate κ using kALDo BTE for silicon with 25x25x25 mesh"
+# Materials Project integration (AI detects mp- prefix)
+python -m cli.mcg plan "Pull mp-2534 data and calculate thermal conductivity from 273K to 373K" --save
 
-# Compare methods
-python -m cli.mcg plan "Compare LAMMPS and kALDo thermal conductivity for silicon"
+# Natural conversational language
+python -m cli.mcg plan "I want to simulate thermal conductivity of mp-149 silicon using LAMMPS at 300-500K with 20x20x20 supercell" --save
 ```
+
+**AI Understanding Examples:**
+- **"room temperature"** → `temperature: [300]`
+- **"300K to 800K"** → `temperature: [300, 400, 500, 600, 700, 800]`
+- **"aluminum oxide"** → `material_id: "aluminum oxide", formula: "Al2O3"`
+- **"20x20x20 supercell"** → `supercell: [20, 20, 20]`
+- **"medium sized simulation"** → `supercell: [15, 15, 15]` (reasonable default)
 
 ### Understanding Results
 
@@ -194,38 +230,46 @@ Results include detailed thermal transport properties:
 
 ## Configuration
 
-MCG-lite uses a centralized `config.json` file to manage all computational codes and execution settings. This allows users to easily customize how simulations are run without modifying code.
+MCG uses **JSON configuration files** in the `configs/` directory to define all computational tools and their capabilities. This enables perfect encapsulation - the core system has zero knowledge of specific simulation codes.
 
-### Configuration File Location
+### Configuration Architecture
 
-The system searches for `config.json` in the following order:
-1. Current directory
-2. Repository root
-3. Path specified in `MCG_CONFIG_PATH` environment variable
-4. `~/.mcg/config.json` (user home)
+Each computational tool is defined by a `.json` file in `configs/`:
+- `configs/lammps.json` - LAMMPS molecular dynamics
+- `configs/materialsproject.json` - Materials Project data fetching
 
 ### Configuration Structure
 
+Example `configs/lammps.json`:
 ```json
 {
-  "codes": {
-    "lammps": {
-      "enabled": true,
-      "execution": {
-        "mode": "docker",  // Options: mock, docker, local, hpc
-        "docker": {
-          "image": "lammps/lammps:stable",
-          "command": "lmp"
-        },
-        "local": {
-          "executable": "/usr/local/bin/lammps",
-          "mpi_command": "mpirun -np 4"
+  "name": "LAMMPS",
+  "description": "Molecular dynamics simulator",
+  "understands": {
+    "thermal conductivity": {
+      "aliases": ["kappa", "heat transport"],
+      "method": "green_kubo",
+      "keywords": ["thermal", "conductivity", "kappa"]
+    }
+  },
+  "parameter_mapping": {
+    "temperature": ["temperature", "T_K", "temp"],
+    "supercell": ["supercell", "cell", "size"]
+  },
+  "execution": {
+    "local": {
+      "executable": "/usr/local/bin/lmp_serial",
+      "command_template": "{executable} -in {input_file}"
+    }
+  },
+  "templates": {
+    "green_kubo": {
+      "needs": ["temperature", "supercell"],
+      "files": {
+        "input_script": {
+          "name": "in.kappa_gk",
+          "content": "# LAMMPS Green-Kubo input template..."
         }
-      },
-      "defaults": {
-        "timestep_fs": 1.0,
-        "equil_ps": 100,
-        "prod_ps": 500
       }
     }
   }
@@ -240,11 +284,15 @@ The system searches for `config.json` in the following order:
 
 ### Environment Variables
 
-Override configuration with environment variables:
-- `MCG_LAMMPS_MODE`: Set execution mode (docker/local/hpc)
-- `MCG_LAMMPS_EXECUTABLE`: Path to LAMMPS executable
+Required and optional environment variables:
+
+**Required:**
+- `ANTHROPIC_API_KEY`: Your Anthropic Claude API key for AI parsing
+
+**Optional:**
+- `MP_API_KEY`: Materials Project API key (only needed for MP workflows)
 - `MCG_STORAGE_PATH`: Base path for data storage
-- `MP_API_KEY`: Materials Project API key
+- `MCG_LOG_LEVEL`: Logging level (INFO, DEBUG)
 
 ### Quick Setup Examples
 
@@ -470,17 +518,17 @@ See `docker-compose.yml` for production configuration with PostgreSQL and Redis.
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `MP_API_KEY` | Materials Project API key | Yes |
+| `ANTHROPIC_API_KEY` | Claude AI API key for parameter parsing | **Yes** |
+| `MP_API_KEY` | Materials Project API key | Only for MP workflows |
 | `MCG_STORAGE_PATH` | Data storage directory | No |
 | `MCG_LOG_LEVEL` | Logging level (INFO, DEBUG) | No |
-| `LAMMPS_IMAGE` | Docker image for LAMMPS | No |
-| `KALDO_IMAGE` | Docker image for kALDo | No |
 
 ### Configuration File
 
 Create `.env` file for persistent configuration:
 
 ```bash
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 MP_API_KEY=your_materials_project_api_key
 MCG_STORAGE_PATH=/opt/mcg/data
 MCG_LOG_LEVEL=INFO
@@ -490,19 +538,29 @@ MCG_LOG_LEVEL=INFO
 
 ### Common Issues
 
-**Issue: "No module named 'numpy'"**
+**Issue: "Interfaces MCP tools not available"**
 ```bash
-pip install numpy
+pip install anthropic python-dotenv
 ```
+
+**Issue: "ANTHROPIC_API_KEY not set"**
+```bash
+echo "ANTHROPIC_API_KEY=your_key_here" > .env
+```
+
+**Issue: "AI parameter extraction failed"**
+- Check your internet connection
+- Verify API key is valid
+- System will fallback to basic regex parsing
 
 **Issue: "MP_API_KEY not set"**
 ```bash
-export MP_API_KEY="your_api_key_here"
+echo "MP_API_KEY=your_key_here" >> .env
 ```
 
 **Issue: "Run not found"**
 - Ensure the run ID is correct
-- Check if calculation completed: `mcg status RUN_ID`
+- Check if calculation completed: `python -m cli.mcg status RUN_ID`
 
 ### Getting Help
 
