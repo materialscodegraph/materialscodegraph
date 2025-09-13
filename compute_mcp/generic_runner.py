@@ -68,8 +68,8 @@ class GenericRunner:
             print(f"Parameters: {params}")
 
             # Simple execution - just run the script from template
-            script = template_config.get('script', '')
-            if script:
+            script_template = template_config.get('script_template', template_config.get('script', ''))
+            if script_template:
                 # Prepare parameters for substitution
                 format_params = dict(params)
 
@@ -85,7 +85,17 @@ class GenericRunner:
                     format_params['temp_single'] = params['temperature'][0]
 
                 # Substitute parameters in script
-                formatted_script = script.format(**format_params)
+                formatted_script = script_template.format(**format_params)
+
+                # Load .env file and substitute environment variables
+                import string
+                try:
+                    from dotenv import load_dotenv
+                    load_dotenv()
+                except ImportError:
+                    # .env file loading is optional
+                    pass
+                formatted_script = string.Template(formatted_script).safe_substitute(os.environ)
                 print(f"Running: {formatted_script}")
 
                 import subprocess
