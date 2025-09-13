@@ -40,7 +40,7 @@ class Asset:
 class Run:
     """Run record for compute operations"""
     id: str
-    kind: Literal["MaterialsProject", "LAMMPS", "kALDo"]
+    kind: str
     status: RunStatus
     runner_version: Optional[str] = None
     started_at: Optional[str] = None
@@ -125,13 +125,10 @@ def validate_method(payload: Dict[str, Any]) -> bool:
     if "family" not in payload or "code" not in payload:
         return False
     
-    valid_families = {"DFT", "MD", "LD"}
-    valid_codes = {"QE", "LAMMPS", "kALDo", "MP"}
-    valid_devices = {"CPU", "GPU"}
-    
+    valid_families = {"DFT", "MD", "LD", "ML", "QM"}
+    valid_devices = {"CPU", "GPU", "TPU"}
+
     if payload["family"] not in valid_families:
-        return False
-    if payload["code"] not in valid_codes:
         return False
     if "device" in payload and payload["device"] not in valid_devices:
         return False

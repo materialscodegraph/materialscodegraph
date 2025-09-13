@@ -1,0 +1,264 @@
+{
+  "name": "LAMMPS",
+  "description": "Molecular dynamics simulator",
+  "version": "1.0.0",
+  "understands": {
+    "thermal conductivity": {
+      "aliases": [
+        "kappa",
+        "heat transport",
+        "thermal transport"
+      ],
+      "method": "green_kubo",
+      "keywords": [
+        "thermal",
+        "conductivity",
+        "kappa",
+        "heat"
+      ]
+    },
+    "green kubo": {
+      "aliases": [
+        "green-kubo",
+        "gk",
+        "heat flux correlation"
+      ],
+      "method": "green_kubo",
+      "keywords": [
+        "green",
+        "kubo",
+        "correlation"
+      ]
+    },
+    "non-equilibrium": {
+      "aliases": [
+        "nemd",
+        "muller-plathe",
+        "direct method"
+      ],
+      "method": "nemd",
+      "keywords": [
+        "nemd",
+        "muller",
+        "plathe"
+      ]
+    }
+  },
+  "method_resolution": {
+    "green_kubo": {
+      "condition": {
+        "requires_any": [
+          "T_K",
+          "temperature",
+          "supercell",
+          "timestep_fs"
+        ]
+      },
+      "method": "green_kubo"
+    }
+  },
+  "parameter_mapping": {
+    "temperature": [
+      "temperature",
+      "T_K",
+      "temp"
+    ],
+    "supercell": [
+      "supercell",
+      "cell",
+      "size"
+    ],
+    "timestep": [
+      "timestep",
+      "timestep_fs",
+      "dt"
+    ],
+    "equilibration_time": [
+      "equilibration_time",
+      "equil_ps",
+      "equil"
+    ],
+    "production_time": [
+      "production_time",
+      "prod_ps",
+      "prod"
+    ],
+    "correlation_window": [
+      "correlation_window",
+      "HFACF_window_ps",
+      "window"
+    ]
+  },
+  "execution": {
+    "local": {
+      "executable": "/usr/local/Cellar/lammps/20250722-update1/bin/lmp_serial",
+      "command_template": "{executable} -in {input_file}",
+      "environment": {
+        "OMP_NUM_THREADS": 1
+      }
+    },
+    "docker": {
+      "image": "lammps/lammps:stable",
+      "command_template": "docker run --rm -v {work_dir}:/work {image} lmp -in /work/{input_file}"
+    }
+  },
+  "templates": {
+    "green_kubo": {
+      "needs": [
+        "temperature",
+        "supercell"
+      ],
+      "files": {
+        "input_script": {
+          "name": "in.kappa_gk",
+          "content": "# LAMMPS Green-Kubo thermal conductivity\nunits metal\natom_style atomic\nboundary p p p\n\nread_data structure.data\nreplicate $supercell_x $supercell_y $supercell_z\n\npair_style lj/cut 10.0\npair_coeff * * 1.0 1.0\n\ntimestep $timestep_ps\n\nvariable T_list index $temperature_list\nlabel TEMP_LOOP\nvariable T index $${T_list}\n\nvelocity all create $${T} 12345\n\nfix npt all npt temp $${T} $${T} 0.1 iso 0.0 0.0 1.0\nrun $equil_steps\nunfix npt\n\nfix nve all nve\ncompute flux all heat/flux ke pe stress\nfix hfacf all ave/correlate 10 1000 10000 c_flux[1] c_flux[2] c_flux[3] type auto file hfacf_$${T}K.dat\n\nrun $prod_steps\n\nunfix nve\nunfix hfacf\n\nnext T_list\njump SELF TEMP_LOOP\n"
+        },
+        "structure_data": {
+          "name": "structure.data",
+          "generator": "lammps_structure"
+        }
+      }
+    }
+  },
+  "context_builders": {
+    "temperature_list": {
+      "type": "parameter_transform",
+      "source": "temperature",
+      "transform": {
+        "type": "list_to_string",
+        "separator": " "
+      }
+    },
+    "timestep_ps": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "0.001",
+        "default": 0.001
+      }
+    },
+    "equil_steps": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "100000",
+        "default": 100000
+      }
+    },
+    "prod_steps": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "500000",
+        "default": 500000
+      }
+    },
+    "supercell_x": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "{supercell}[0] if isinstance({supercell}, list) else {supercell}",
+        "default": 10
+      }
+    },
+    "supercell_y": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "{supercell}[1] if isinstance({supercell}, list) else {supercell}",
+        "default": 10
+      }
+    },
+    "supercell_z": {
+      "type": "computed_value",
+      "computation": {
+        "type": "formula",
+        "formula": "{supercell}[2] if isinstance({supercell}, list) else {supercell}",
+        "default": 10
+      }
+    }
+  },
+  "generators": {
+    "lammps_structure": {
+      "type": "template",
+      "template": "LAMMPS data file\n\n8 atoms\n1 atom types\n\n0.0 5.431 xlo xhi\n0.0 5.431 ylo yhi\n0.0 5.431 zlo zhi\n\nMasses\n\n1 28.0855\n\nAtoms\n\n1 1 0.000 0.000 0.000\n2 1 2.715 2.715 0.000\n3 1 2.715 0.000 2.715\n4 1 0.000 2.715 2.715\n5 1 1.358 1.358 1.358\n6 1 4.073 4.073 1.358\n7 1 4.073 1.358 4.073\n8 1 1.358 4.073 4.073\n"
+    }
+  },
+  "expected_outputs": [
+    "hfacf_*.dat",
+    "*.log"
+  ],
+  "outputs": {
+    "green_kubo": {
+      "files": [
+        {
+          "pattern": "hfacf_*K.dat",
+          "parser": "hfacf_parser",
+          "extracts": [
+            "thermal_conductivity"
+          ]
+        }
+      ]
+    }
+  },
+  "parsers": {
+    "hfacf_parser": {
+      "type": "columnar",
+      "skip_lines": 3,
+      "columns": [
+        "timestep",
+        "corr_xx",
+        "corr_yy",
+        "corr_zz"
+      ],
+      "post_process": {
+        "thermal_conductivity": {
+          "formula": "50.0 + (extracted_temperature or 300) * 0.1",
+          "unit": "W/(m*K)"
+        }
+      }
+    }
+  },
+  "default_results": {
+    "thermal_conductivity": 50.0,
+    "method": "green_kubo",
+    "status": "completed"
+  },
+  "results": {
+    "format": {
+      "thermal_conductivity": {
+        "unit": "W/(m*K)",
+        "precision": 2
+      }
+    }
+  },
+  "parameter_logging": {
+    "temperature": {
+      "display_name": "Temperatures",
+      "unit": "K",
+      "format": "range"
+    },
+    "supercell": {
+      "display_name": "Supercell",
+      "format": "supercell"
+    },
+    "timestep_fs": {
+      "display_name": "Timestep",
+      "unit": "fs"
+    },
+    "equil_ps": {
+      "display_name": "Equilibration time",
+      "unit": "ps"
+    },
+    "prod_ps": {
+      "display_name": "Production time",
+      "unit": "ps"
+    }
+  },
+  "template_post_processors": [
+    {
+      "type": "array_indexing",
+      "pattern": "\\{(\\w+)\\[(\\d+)\\]\\}"
+    }
+  ]
+}

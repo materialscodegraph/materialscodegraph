@@ -14,12 +14,6 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import string
 
-# Try to import yaml, fall back to json if not available
-try:
-    import yaml
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
 
 from common.schema import Asset, Edge, Run
 from common.ids import asset_id, generate_id
@@ -38,8 +32,7 @@ class GenericRunner:
         self.load_configs()
 
     def load_configs(self):
-        """Load all configuration files"""
-        # Load JSON configs first (preferred)
+        """Load all JSON configuration files"""
         for config_file in self.config_dir.glob("*.json"):
             try:
                 with open(config_file, 'r') as f:
@@ -51,68 +44,6 @@ class GenericRunner:
             except Exception as e:
                 print(f"Error loading {config_file}: {e}")
 
-        # Also load YAML/MCG files if no JSON equivalent exists
-        for config_file in self.config_dir.glob("*.mcg"):
-            name = config_file.stem.replace('config_', '')
-            if name not in self.configs:
-                try:
-                    with open(config_file, 'r') as f:
-                        if HAS_YAML:
-                            config = yaml.safe_load(f)
-                        else:
-                            config = self._parse_simple_config(f.read())
-
-                    if config:
-                        self.configs[name] = config
-                        print(f"Loaded MCG config: {config.get('name', name)}")
-                except Exception as e:
-                    print(f"Error loading {config_file}: {e}")
-
-        # Load YAML files
-        for config_file in self.config_dir.glob("*.yml"):
-            name = config_file.stem
-            if name not in self.configs and HAS_YAML:
-                try:
-                    with open(config_file, 'r') as f:
-                        config = yaml.safe_load(f)
-                    if config:
-                        self.configs[name] = config
-                        print(f"Loaded YAML config: {config.get('name', name)}")
-                except Exception as e:
-                    print(f"Error loading {config_file}: {e}")
-
-    def _parse_simple_config(self, content: str) -> Dict:
-        """Simple config parser for testing without YAML"""
-        config = {}
-        lines = content.split('\n')
-
-        for line in lines:
-            line = line.strip()
-            if line.startswith('#') or not line:
-                continue
-
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip()
-                value = value.strip()
-
-                if key == 'name':
-                    config['name'] = value
-                elif key == 'description':
-                    config['description'] = value
-
-        # Add minimal structure for testing
-        if 'name' not in config:
-            config['name'] = 'Unknown'
-
-        # Add default structures
-        config.setdefault('understands', {})
-        config.setdefault('extracts', {})
-        config.setdefault('execution', {'local': {'executable': 'echo'}})
-        config.setdefault('templates', {'default': {'needs': [], 'files': {}}})
-        config.setdefault('outputs', {})
-
-        return config
 
     def run(self, runner_kind: str, run_obj: Run, assets: List[Asset], params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a run using configuration only"""
@@ -144,6 +75,10 @@ class GenericRunner:
 
                 # Generate all files from templates
                 print(f"=== Generating files for {config.get('name')} - {method} ===")
+
+                # Log key simulation parameters
+                self._log_simulation_parameters(params, config, method)
+
                 generated_files = self._generate_files(
                     template_config, config, asset_map, params, tmppath
                 )
@@ -188,7 +123,8 @@ class GenericRunner:
                 )
 
                 # Create lineage edges
-                edges = self._create_edges(run_obj, assets, assets_to_return[0], log_artifact)
+                main_result = assets_to_return[0] if assets_to_return else None
+                edges = self._create_edges(run_obj, assets, main_result, log_artifact)
 
                 # Update run status
                 run_obj.status = "done"
@@ -412,6 +348,8 @@ class GenericRunner:
                             context[source_param],
                             builder_spec['transform']
                         )
+                    elif 'default' in builder_spec:
+                        context[builder_name] = builder_spec['default']
 
                 elif builder_spec['type'] == 'computed_value':
                     context[builder_name] = self._compute_value(builder_spec, context)
@@ -544,7 +482,10 @@ class GenericRunner:
         command_template = config.get('command_template', '{executable} {input_file}')
 
         # Get input file
-        input_file = files.get('input_script', files.get('query_script', list(files.values())[0]))
+        if files:
+            input_file = files.get('input_script', files.get('query_script', list(files.values())[0]))
+        else:
+            raise RuntimeError("No template files available for execution")
 
         # Apply command template - avoid conflicts with config keys
         template_vars = {
@@ -786,6 +727,46 @@ class GenericRunner:
         for key, value in results.items():
             log += f"  {key}: {value}\n"
         return log
+
+    def _log_simulation_parameters(self, params: Dict, config: Dict, method: str):
+        """Log detailed simulation parameters using configuration-driven approach"""
+        print(f"Method: {method}")
+        print(f"Runner: {config.get('name', 'Unknown')}")
+
+        # Use configuration-driven parameter logging
+        logging_config = config.get('parameter_logging', {})
+
+        if logging_config:
+            for param_key, log_spec in logging_config.items():
+                if param_key in params:
+                    self._log_parameter_value(param_key, params[param_key], log_spec)
+        else:
+            # Generic fallback - just log all parameters
+            for key, value in params.items():
+                if isinstance(value, list):
+                    print(f"{key.title()}: {', '.join(map(str, value))}")
+                else:
+                    print(f"{key.title()}: {value}")
+
+        print()  # Empty line for readability
+
+    def _log_parameter_value(self, param_key: str, value: Any, log_spec: Dict):
+        """Log a parameter value according to its configuration specification"""
+        display_name = log_spec.get('display_name', param_key.title())
+        unit = log_spec.get('unit', '')
+        format_type = log_spec.get('format', 'default')
+
+        if format_type == 'range' and isinstance(value, list):
+            unit_str = f" {unit}" if unit else ""
+            print(f"{display_name}: {', '.join(map(str, value))}{unit_str}")
+            if len(value) > 1:
+                print(f"{display_name} range: {min(value)} - {max(value)}{unit_str}")
+        elif format_type == 'supercell' and isinstance(value, list) and len(value) == 3:
+            total = value[0] * value[1] * value[2]
+            print(f"{display_name}: {value[0]}×{value[1]}×{value[2]} ({total:,} unit cells)")
+        else:
+            unit_str = f" {unit}" if unit else ""
+            print(f"{display_name}: {value}{unit_str}")
 
     def _create_edges(self, run_obj: Run, input_assets: List[Asset],
                      results_asset: Asset, log_artifact: Asset) -> List[Edge]:

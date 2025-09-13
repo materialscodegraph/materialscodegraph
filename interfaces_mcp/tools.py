@@ -1,177 +1,105 @@
 """Planning and explanation tools for natural language interactions"""
 import re
+import json
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+
 
 from common.schema import Asset, Edge
 from common.ids import asset_id, generate_id
 
 class InterfacesTools:
     """Tools for planning and explaining computational workflows"""
-    
+
+    def __init__(self, config_dir: str = None):
+        """Initialize with configuration directory"""
+        if config_dir is None:
+            config_dir = Path(__file__).parent.parent / "configs"
+        self.config_dir = Path(config_dir)
+        self.configs = {}
+        self.load_configs()
+
+    def load_configs(self):
+        """Load all configuration files to understand available runners"""
+        # Load JSON config files
+        for config_file in self.config_dir.glob("*.json"):
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+
+                if config:
+                    name = config.get('name', config_file.stem)
+                    self.configs[name] = config
+            except Exception as e:
+                # Silently skip files that can't be loaded
+                pass
+
+
     def plan(self, nl_task: str, context_assets: Optional[List[Asset]] = None) -> Dict[str, Any]:
-        """Parse natural language task and create execution plan"""
-        
+        """Parse natural language task and create execution plan using configuration-driven approach"""
+
         # Parse the natural language task
         task_lower = nl_task.lower()
-        
+
         # Initialize plan components
         runner_kind = None
         assets = []
         params = {}
         workflow = None
         missing = []
-        
-        # Detect Materials Project fetch
-        mp_pattern = r'mp-?\d+|material.*project|pull.*(?:mp-?\d+)'
-        if re.search(mp_pattern, task_lower):
-            # Extract material ID
-            mp_id_match = re.search(r'mp-?\d+', task_lower)
-            if mp_id_match:
-                material_id = mp_id_match.group()
-                # Ensure proper mp-XXX format
-                if not material_id.startswith('mp-'):
-                    material_id = material_id.replace('mp', 'mp-')
-                params["material_id"] = material_id
-                runner_kind = "MaterialsProject"
-                workflow = "fetch_structure"
-            else:
-                missing.append("material_id")
-        
-        # Detect thermal conductivity calculation
-        kappa_pattern = r'thermal conductivity|kappa|κ|\bk\b|heat transport'
-        if re.search(kappa_pattern, task_lower):
-            if not runner_kind:
-                runner_kind = "LAMMPS"
-            workflow = "kappa_calculation"
-            
-            # Look for temperature range
-            temp_pattern = r'(\d+)\s*(?:-|to|–)\s*(\d+)\s*k'
-            temp_match = re.search(temp_pattern, task_lower)
-            if temp_match:
-                T_start = int(temp_match.group(1))
-                T_end = int(temp_match.group(2))
-                # Generate temperature grid
-                T_K = list(range(T_start, T_end + 1, 100))
-                params["T_K"] = T_K
-            else:
-                # Check for explicit temperature list
-                temps = re.findall(r'(\d+)\s*k(?:elvin)?', task_lower)
-                if temps:
-                    params["T_K"] = [int(t) for t in temps]
-                else:
-                    missing.append("temperature_grid")
-            
-            # Look for supercell - supports formats like "20x20x20", "(20, 20, 20)", "[20, 20, 20]", or "20 20 20"
-            supercell_pattern = r'(?:[\(\[]?\s*(\d+)[\s,x]+(\d+)[\s,x]+(\d+)\s*[\)\]]?)'
-            supercell_match = re.search(supercell_pattern, task_lower)
-            if supercell_match and supercell_match.group(1):
-                params["supercell"] = [
-                    int(supercell_match.group(1)),
-                    int(supercell_match.group(2)),
-                    int(supercell_match.group(3))
-                ]
-            else:
-                missing.append("supercell")
-            
-            # Check for method specification
-            if 'chgnet' in task_lower:
-                method = Asset(
-                    type="Method",
-                    id=generate_id("M"),
-                    payload={
-                        "family": "MD",
-                        "code": "LAMMPS",
-                        "model": "CHGNet",
-                        "device": "GPU" if "gpu" in task_lower or "a100" in task_lower else "CPU"
-                    }
-                )
-                assets.append(method)
-            elif 'green-kubo' in task_lower or 'gk' in task_lower:
-                method = Asset(
-                    type="Method",
-                    id=generate_id("M"),
-                    payload={
-                        "family": "MD",
-                        "code": "LAMMPS",
-                        "model": "CHGNet",
-                        "device": "GPU" if "gpu" in task_lower else "CPU"
-                    }
-                )
-                assets.append(method)
-                params["method"] = "Green-Kubo"
-            
-            # Set default MD parameters if not specified
-            if "timestep_fs" not in params:
-                params["timestep_fs"] = 1.0
-            if "equil_ps" not in params:
-                params["equil_ps"] = 100
-            if "prod_ps" not in params:
-                params["prod_ps"] = 500
-            if "HFACF_window_ps" not in params:
-                params["HFACF_window_ps"] = 200
-        
-        # Detect BTE/kALDo request
-        if 'bte' in task_lower or 'kaldo' in task_lower or 'boltzmann' in task_lower:
-            runner_kind = "kALDo"
-            workflow = "bte_calculation"
-            
-            # Look for mesh parameters
-            mesh_pattern = r'(\d+)\s*x\s*(\d+)\s*x\s*(\d+)\s*mesh|mesh\s*(\d+)'
-            mesh_match = re.search(mesh_pattern, task_lower)
-            if mesh_match:
-                if mesh_match.group(1):  # Full mesh specification
-                    params["mesh"] = [
-                        int(mesh_match.group(1)),
-                        int(mesh_match.group(2)),
-                        int(mesh_match.group(3))
-                    ]
-                else:  # Single number mesh
-                    n = int(mesh_match.group(4))
-                    params["mesh"] = [n, n, n]
-            else:
-                params["mesh"] = [20, 20, 20]  # Default
-            
-            # BTE-specific parameters
-            if "broadening" in task_lower:
-                # Look for broadening width
-                broad_match = re.search(r'(\d+\.?\d*)\s*mev', task_lower)
-                if broad_match:
-                    params["broadening_width"] = float(broad_match.group(1))
-                else:
-                    params["broadening_width"] = 1.0
-            
-            if "lorentz" in task_lower:
-                params["broadening_shape"] = "lorentz"
-            else:
-                params["broadening_shape"] = "gauss"
-            
-            # Include isotope scattering by default for BTE
-            params["include_isotopes"] = True
-            
-            # Create BTE method asset
-            if not any(a.type == "Method" for a in assets):
-                method = Asset(
-                    type="Method",
-                    id=generate_id("M"),
-                    payload={
-                        "family": "LD",  # Lattice Dynamics
-                        "code": "kALDo",
-                        "model": "BTE",
-                        "version": "3.0+"
-                    }
-                )
-                assets.append(method)
-        
-        # Handle silicon specifically
-        if 'silicon' in task_lower or 'si' in task_lower:
-            if not params.get("material_id"):
-                params["material_id"] = "mp-149"  # Silicon material ID
-        
-        # Create workflow plan
-        if workflow == "kappa_calculation" and "material_id" in params:
-            # Two-step workflow: fetch then calculate
-            workflow = "fetch_then_kappa"
+
+        # First, extract ALL possible parameters from ALL configurations
+        # This ensures we capture material_id, temperature, etc. regardless of which runner matches first
+        all_param_mappings = {}
+        for config_name, config in self.configs.items():
+            param_mapping = config.get('parameter_mapping', {})
+            for param_key, param_aliases in param_mapping.items():
+                if param_key not in all_param_mappings:
+                    all_param_mappings[param_key] = param_aliases
+
+        # Extract parameters using combined mapping from all configurations
+        self._extract_parameters_from_task(task_lower, params, all_param_mappings, missing)
+
+        # Now find the best matching configuration for execution
+        best_match = None
+        best_score = 0
+
+        for config_name, config in self.configs.items():
+            understands = config.get('understands', {})
+            score = 0
+            matched_keywords = []
+
+            # Check each capability this config understands
+            for capability, spec in understands.items():
+                keywords = spec.get('keywords', [])
+                aliases = spec.get('aliases', [])
+
+                # Check if task matches any keywords or aliases
+                all_terms = keywords + aliases + [capability]
+                for term in all_terms:
+                    if term.lower() in task_lower:
+                        score += 1
+                        matched_keywords.append(term)
+
+            if score > best_score:
+                best_score = score
+                best_match = {
+                    'config_name': config_name,
+                    'config': config,
+                    'matched_keywords': matched_keywords,
+                    'score': score
+                }
+
+        if best_match:
+            runner_kind = best_match['config_name']
+            config = best_match['config']
+
+            # Determine workflow based on configuration's method resolution
+            workflow = self._determine_workflow(task_lower, config, params)
+
+            # Check if we need multiple runners for a workflow based on extracted parameters
+            workflow = self._check_multi_step_workflow(task_lower, runner_kind, params, workflow)
         
         # Create params asset if we have params
         if params:
@@ -273,3 +201,107 @@ class InterfacesTools:
             explanation.append("3. Results should match within numerical tolerance")
         
         return "\n".join(explanation)
+
+    def _extract_parameters_from_task(self, task_lower: str, params: Dict, param_mapping: Dict, missing: List):
+        """Extract parameters from task using configuration's parameter mapping"""
+
+        # Material ID extraction (generic pattern)
+        material_patterns = [
+            r'mp-?\d+',  # Materials Project IDs
+            r'\b[A-Z][a-z]?\d*\b',  # Chemical formulas like Si, Al2O3
+        ]
+
+        for pattern in material_patterns:
+            match = re.search(pattern, task_lower, re.IGNORECASE)
+            if match:
+                material_id = match.group()
+                if 'material_id' in param_mapping:
+                    params[param_mapping['material_id'][0]] = material_id
+                    break
+
+        # Temperature extraction
+        temp_patterns = [
+            (r'(\d+)\s*(?:-|to|–)\s*(\d+)\s*k', 'range'),  # Range like "300-800K"
+            (r'(\d+)\s*k(?:elvin)?', 'single'),  # Single temp like "300K"
+        ]
+
+        for pattern, pattern_type in temp_patterns:
+            if 'temperature' in param_mapping:
+                temp_aliases = param_mapping['temperature']
+                matches = re.findall(pattern, task_lower)
+                if matches:
+                    if pattern_type == 'range' and len(matches[0]) == 2:
+                        T_start, T_end = int(matches[0][0]), int(matches[0][1])
+                        temp_values = list(range(T_start, T_end + 1, 100))
+                    else:
+                        temp_values = [int(m) if isinstance(m, str) else int(m[0]) for m in matches]
+
+                    params[temp_aliases[0]] = temp_values
+                    break
+        else:
+            if 'temperature' in param_mapping:
+                missing.append('temperature')
+
+        # Supercell extraction
+        supercell_patterns = [
+            r'(\d+)x(\d+)x(\d+)',  # Format like "20x20x20"
+            r'[\(\[]?\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*[\)\]]?'  # Format like "[20, 20, 20]"
+        ]
+
+        if 'supercell' in param_mapping:
+            supercell_aliases = param_mapping['supercell']
+            for pattern in supercell_patterns:
+                match = re.search(pattern, task_lower)
+                if match:
+                    params[supercell_aliases[0]] = [int(match.group(1)), int(match.group(2)), int(match.group(3))]
+                    break
+            else:
+                missing.append('supercell')
+
+        # Generic numeric parameter extraction for timestep, etc.
+        numeric_patterns = {
+            'timestep': r'timestep[:\s]*(\d+\.?\d*)\s*fs',
+            'equilibration': r'equil[^\d]*(\d+)\s*ps',
+            'production': r'prod[^\d]*(\d+)\s*ps',
+        }
+
+        for param_key, pattern in numeric_patterns.items():
+            if param_key in param_mapping:
+                match = re.search(pattern, task_lower)
+                if match:
+                    param_aliases = param_mapping[param_key]
+                    params[param_aliases[0]] = float(match.group(1))
+
+    def _determine_workflow(self, task_lower: str, config: Dict, params: Dict) -> str:
+        """Determine workflow using configuration's method resolution"""
+
+        method_resolution = config.get('method_resolution', {})
+        understands = config.get('understands', {})
+
+        # Find the best matching method based on keywords/aliases
+        best_method = None
+        best_score = 0
+
+        for capability, spec in understands.items():
+            keywords = spec.get('keywords', [])
+            aliases = spec.get('aliases', [])
+            all_terms = keywords + aliases + [capability]
+
+            score = sum(1 for term in all_terms if term.lower() in task_lower)
+            if score > best_score:
+                best_score = score
+                best_method = spec.get('method', capability)
+
+        return best_method
+
+    def _check_multi_step_workflow(self, task_lower: str, runner_kind: str, params: Dict, workflow: str) -> str:
+        """Check if we need a multi-step workflow based on parameters and context"""
+
+        # If we have both material_id and thermal properties, suggest fetch-then-calculate workflow
+        has_material_fetch = 'material_id' in params
+        has_thermal_calc = any(term in task_lower for term in ['thermal', 'conductivity', 'kappa'])
+
+        if has_material_fetch and has_thermal_calc:
+            return "fetch_then_kappa"
+
+        return workflow

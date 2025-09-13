@@ -1,0 +1,141 @@
+{
+  "name": "MaterialsProject",
+  "description": "Interface to Materials Project database",
+  "version": "1.0.0",
+  "understands": {
+    "pull": {
+      "aliases": [
+        "get",
+        "fetch",
+        "download",
+        "retrieve"
+      ],
+      "method": "fetch_material",
+      "keywords": [
+        "pull",
+        "get",
+        "fetch",
+        "mp-"
+      ]
+    },
+    "search": {
+      "aliases": [
+        "find",
+        "query",
+        "lookup"
+      ],
+      "method": "search_materials",
+      "keywords": [
+        "search",
+        "find",
+        "query"
+      ]
+    }
+  },
+  "method_resolution": {
+    "fetch_material": {
+      "condition": {
+        "requires_any": [
+          "material_id"
+        ]
+      },
+      "method": "fetch_material"
+    }
+  },
+  "parameter_mapping": {
+    "material_id": [
+      "material_id",
+      "mp_id",
+      "id"
+    ],
+    "formula": [
+      "formula",
+      "composition",
+      "chemical_formula"
+    ],
+    "property": [
+      "property",
+      "prop"
+    ]
+  },
+  "execution": {
+    "local": {
+      "executable": "python3",
+      "command_template": "{executable} {input_file}",
+      "environment": {
+        "MP_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  },
+  "templates": {
+    "fetch_material": {
+      "needs": [
+        "material_id"
+      ],
+      "files": {
+        "query_script": {
+          "name": "mp_query.py",
+          "content": "# Materials Project query\nimport json\n\n# Mock MP data for testing\nmaterial_id = \"$material_id\"\n\nmaterial_data = {\n    \"material_id\": material_id,\n    \"formula\": \"Si\" if material_id == \"mp-149\" else \"Unknown\",\n    \"structure\": {\n        \"lattice\": [[5.431, 0, 0], [0, 5.431, 0], [0, 0, 5.431]],\n        \"atoms\": [\n            {\"element\": \"Si\", \"pos\": [0, 0, 0]},\n            {\"element\": \"Si\", \"pos\": [2.715, 2.715, 0]},\n            {\"element\": \"Si\", \"pos\": [2.715, 0, 2.715]},\n            {\"element\": \"Si\", \"pos\": [0, 2.715, 2.715]},\n            {\"element\": \"Si\", \"pos\": [1.358, 1.358, 1.358]},\n            {\"element\": \"Si\", \"pos\": [4.073, 4.073, 1.358]},\n            {\"element\": \"Si\", \"pos\": [4.073, 1.358, 4.073]},\n            {\"element\": \"Si\", \"pos\": [1.358, 4.073, 4.073]}\n        ]\n    },\n    \"band_gap\": 1.14,\n    \"formation_energy\": 0.0\n}\n\nwith open(\"material_data.json\", \"w\") as f:\n    json.dump(material_data, f, indent=2)\n\nprint(f\"Fetched: {material_data['formula']} ({material_id})\")\nprint(f\"Band gap: {material_data['band_gap']} eV\")\nprint(f\"Structure saved to material_data.json\")\n"
+        }
+      }
+    }
+  },
+  "expected_outputs": [
+    "material_data.json",
+    "*.log"
+  ],
+  "outputs": {
+    "fetch_material": {
+      "files": [
+        {
+          "name": "material_data.json",
+          "parser": "json_parser",
+          "extracts": [
+            "material_id",
+            "formula",
+            "structure",
+            "band_gap"
+          ]
+        }
+      ]
+    }
+  },
+  "parsers": {
+    "json_parser": {
+      "type": "json"
+    }
+  },
+  "result_assets": {
+    "system_structure": {
+      "conditions": {
+        "requires_data": [
+          "structure"
+        ]
+      },
+      "type": "System",
+      "payload": {
+        "structure": "structure"
+      }
+    }
+  },
+  "results": {
+    "format": {
+      "band_gap": {
+        "unit": "eV",
+        "precision": 3
+      },
+      "formation_energy": {
+        "unit": "eV/atom",
+        "precision": 4
+      }
+    }
+  },
+  "parameter_logging": {
+    "material_id": {
+      "display_name": "Material ID"
+    },
+    "formula": {
+      "display_name": "Chemical formula"
+    }
+  }
+}

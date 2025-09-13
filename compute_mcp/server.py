@@ -31,7 +31,7 @@ async def list_tools() -> List[Tool]:
                 "properties": {
                     "runner_kind": {
                         "type": "string",
-                        "enum": ["MaterialsProject", "LAMMPS", "kALDo"]
+                        "description": "Name of the computational runner to use"
                     },
                     "asset_ids": {
                         "type": "array",

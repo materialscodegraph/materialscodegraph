@@ -335,58 +335,11 @@ Examples:
                 with open(args.plan, "r") as f:
                     plan = json.load(f)
             
-            # Handle workflow execution in start command as well
-            if plan.get("workflow") == "fetch_then_kappa":
+            # Handle multi-step workflow execution (only for workflows with multiple actions)
+            if plan.get("workflow") and _is_multi_step_workflow(plan.get("workflow", "")):
                 try:
-                    # Two-step workflow
-                    print("Starting two-step workflow: fetch then kappa")
-                    
-                    # Step 1: Fetch structure
-                    mp_plan = {
-                        "runner_kind": "MaterialsProject",
-                        "assets": [a for a in plan["assets"] if a["type"] == "Params"],
-                        "params": plan["params"]
-                    }
-                    run_id1 = client.start(mp_plan)
-                    print(f"Step 1 - Materials Project fetch: {run_id1}")
-                    
-                    # Step 2: Run kappa calculation using assets from Step 1
-                    step1_results = client.results(run_id1)
-                    
-                    # Combine System asset from Step 1 with Method/Params from original plan
-                    combined_assets = step1_results["assets"]  # System asset from MaterialsProject
-                    
-                    # Add Method and Params assets from original plan
-                    for asset in plan.get("assets", []):
-                        if asset["type"] in ["Method", "Params"]:
-                            combined_assets.append(asset)
-                    
-                    # If no Method asset found, add a default LAMMPS method
-                    has_method = any(asset["type"] == "Method" for asset in combined_assets)
-                    if not has_method:
-                        from common.ids import generate_id
-                        method_asset = {
-                            "type": "Method",
-                            "id": generate_id("M"),
-                            "payload": {
-                                "family": "MD",
-                                "code": "LAMMPS", 
-                                "model": "LJ",
-                                "device": "CPU"
-                            }
-                        }
-                        combined_assets.append(method_asset)
-                    
-                    # Run LAMMPS calculation
-                    lammps_plan = {
-                        "runner_kind": "LAMMPS",
-                        "assets": combined_assets,
-                        "params": plan["params"]
-                    }
-                    run_id2 = client.start(lammps_plan)
-                    print(f"Step 2 - LAMMPS kappa calculation: {run_id2}")
-                    print(f"Run IDs: {run_id1}, {run_id2}")
-                    
+                    run_ids = _execute_multi_step_workflow(client, plan)
+                    print(f"Workflow complete! Run IDs: {', '.join(run_ids)}")
                 except Exception as e:
                     print(f"Error: {e}")
                     raise
@@ -465,69 +418,20 @@ Examples:
             
             print("\nExecuting plan...")
             
-            # Handle workflow execution
-            if plan.get("workflow") == "fetch_then_kappa":
+            # Handle multi-step workflow execution (only for workflows with multiple actions)
+            if plan.get("workflow") and _is_multi_step_workflow(plan.get("workflow", "")):
                 try:
-                    # Two-step workflow
-                    print("Starting two-step workflow: fetch then kappa")
-                    
-                    # Step 1: Fetch structure
-                    mp_plan = {
-                        "runner_kind": "MaterialsProject",
-                        "assets": [a for a in plan["assets"] if a["type"] == "Params"],
-                        "params": plan["params"]
-                    }
-                    run_id1 = client.start(mp_plan)
-                    print(f"Step 1 - Materials Project fetch: {run_id1}")
-                    
-                    # Step 2: Run kappa calculation using assets from Step 1
-                    step1_results = client.results(run_id1)
-                    
-                    # Combine System asset from Step 1 with Method/Params from original plan
-                    combined_assets = step1_results["assets"]  # System asset from MaterialsProject
-                    
-                    # Add Method and Params assets from original plan
-                    for asset in plan.get("assets", []):
-                        if asset["type"] in ["Method", "Params"]:
-                            combined_assets.append(asset)
-                    
-                    # If no Method asset found, add a default LAMMPS method
-                    has_method = any(asset["type"] == "Method" for asset in combined_assets)
-                    if not has_method:
-                        from common.ids import generate_id
-                        method_asset = {
-                            "type": "Method",
-                            "id": generate_id("M"),
-                            "payload": {
-                                "family": "MD",
-                                "code": "LAMMPS", 
-                                "model": "LJ",
-                                "device": "CPU"
-                            }
-                        }
-                        combined_assets.append(method_asset)
-                    
-                    # Run LAMMPS calculation
-                    lammps_plan = {
-                        "runner_kind": "LAMMPS",
-                        "assets": combined_assets,
-                        "params": plan["params"]
-                    }
-                    run_id2 = client.start(lammps_plan)
-                    print(f"Step 2 - LAMMPS kappa calculation: {run_id2}")
-                    
-                    final_run_id = run_id2
-                    print(f"\nWorkflow complete! Run IDs: {run_id1}, {run_id2}")
-                    
+                    run_ids = _execute_multi_step_workflow(client, plan)
+                    final_run_id = run_ids[-1]  # Last run ID for results
+                    print(f"\nWorkflow complete! Run IDs: {', '.join(run_ids)}")
                 except Exception as e:
                     print(f"Error: {e}")
                     raise
-                
             else:
                 # Single-step execution
                 final_run_id = client.start(plan)
                 print(f"Started run: {final_run_id}")
-            
+
             # Get and display results
             print("\nRetrieving results...")
             results = client.results(final_run_id)
@@ -552,6 +456,149 @@ Examples:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+def _is_multi_step_workflow(workflow: str) -> bool:
+    """Determine if workflow name indicates multiple steps vs single method"""
+    workflow_lower = workflow.lower()
+
+    # Multi-step indicators
+    multi_step_keywords = [
+        "then", "fetch_then", "pull_then", "get_then",
+        "prep_", "material_", "_analysis", "_simulate"
+    ]
+
+    # Check for explicit multi-step patterns
+    for keyword in multi_step_keywords:
+        if keyword in workflow_lower:
+            return True
+
+    # Single method names (even with underscores) are NOT multi-step
+    single_method_patterns = [
+        "green_kubo", "nemd", "rta", "bte", "dft", "md_nvt", "md_npt"
+    ]
+
+    for pattern in single_method_patterns:
+        if workflow_lower == pattern:
+            return False
+
+    return False
+
+def _execute_multi_step_workflow(client, plan: dict) -> list:
+    """Execute multi-step workflow dynamically based on workflow name"""
+    workflow = plan.get("workflow", "")
+    workflow_steps = _parse_workflow_definition(workflow)
+
+    if not workflow_steps:
+        raise ValueError(f"Unknown workflow: {workflow}")
+
+    print(f"Starting {len(workflow_steps)}-step workflow: {workflow}")
+
+    run_ids = []
+    accumulated_assets = list(plan.get("assets", []))
+
+    for i, step_runner in enumerate(workflow_steps, 1):
+        print(f"Step {i} - {step_runner} execution")
+
+        # Create plan for this step
+        step_plan = {
+            "runner_kind": step_runner,
+            "assets": accumulated_assets,
+            "params": plan["params"]
+        }
+
+        # Execute step
+        run_id = client.start(step_plan)
+        run_ids.append(run_id)
+        print(f"  Run ID: {run_id}")
+
+        # Get results and accumulate assets for next step
+        if i < len(workflow_steps):  # Not the last step
+            # Wait for step to complete
+            import time
+            print(f"  Waiting for step {i} to complete...")
+            max_wait = 60  # seconds
+            waited = 0
+            while waited < max_wait:
+                status = client.status(run_id)
+                if status.get("status") == "done":
+                    break
+                time.sleep(2)
+                waited += 2
+                print(f"    Waiting... ({waited}s)")
+
+            step_results = client.results(run_id)
+            new_assets = step_results.get("assets", [])
+
+            # Add new assets while preserving original Params/Method assets
+            for asset in new_assets:
+                if asset["type"] not in ["Params"]:  # Don't duplicate params
+                    accumulated_assets.append(asset)
+
+    return run_ids
+
+def _parse_workflow_definition(workflow: str) -> list:
+    """Parse workflow name into sequence of runners using MCG configurations"""
+    from pathlib import Path
+
+    configs_dir = Path(__file__).parent.parent / "configs"
+    runners = []
+    workflow_parts = workflow.lower().split("_")
+
+    # Load runner capabilities from JSON config files
+    runner_capabilities = {}
+    for config_file in configs_dir.glob("*.json"):
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+
+            if not config or 'name' not in config:
+                continue
+
+            runner_name = config['name']
+            understands = config.get('understands', {})
+
+            # Build keyword mapping for this runner
+            keywords = []
+            for capability, spec in understands.items():
+                keywords.extend(spec.get('keywords', []))
+                keywords.extend(spec.get('aliases', []))
+                keywords.append(capability.lower())
+
+            runner_capabilities[runner_name] = keywords
+
+        except Exception:
+            continue
+
+    # Load workflow mappings from config files
+    if not runner_capabilities:
+        # Try to determine from available configs
+        available_configs = [f.stem for f in configs_dir.glob("*.json")]
+        if len(available_configs) >= 2:
+            # Default two-step workflow uses all available configs
+            return available_configs
+        else:
+            # Fallback to single config
+            return available_configs
+
+    # Match workflow parts to runners based on their capabilities
+    for part in workflow_parts:
+        if part == "then":
+            continue
+
+        best_runner = None
+        max_matches = 0
+
+        # Find runner with most keyword matches for this workflow part
+        for runner_name, keywords in runner_capabilities.items():
+            matches = sum(1 for keyword in keywords if part in keyword.lower() or keyword.lower() in part)
+            if matches > max_matches:
+                max_matches = matches
+                best_runner = runner_name
+
+        if best_runner:
+            runners.append(best_runner)
+
+    return runners
 
 if __name__ == "__main__":
     # Add app directory to path for imports

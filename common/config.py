@@ -54,48 +54,14 @@ class Config:
     
     def _apply_environment_overrides(self):
         """Apply environment variable overrides"""
-        # Override execution mode if specified
-        if "MCG_LAMMPS_MODE" in os.environ:
-            self._config["codes"]["lammps"]["execution"]["mode"] = os.environ["MCG_LAMMPS_MODE"]
-        
-        if "MCG_LAMMPS_EXECUTABLE" in os.environ:
-            self._config["codes"]["lammps"]["execution"]["local"]["executable"] = os.environ["MCG_LAMMPS_EXECUTABLE"]
-        
+        # Generic storage path override
         if "MCG_STORAGE_PATH" in os.environ:
             self._config["storage"]["base_path"] = os.environ["MCG_STORAGE_PATH"]
     
     def _get_default_config(self) -> Dict[str, Any]:
-        """Return default configuration"""
+        """Return minimal default configuration"""
         return {
-            "codes": {
-                "lammps": {
-                    "enabled": True,
-                    "execution": {
-                        "docker": {
-                            "image": "lammps/lammps:stable",
-                            "command": "lmp"
-                        },
-                        "local": {
-                            "executable": "lammps"
-                        }
-                    },
-                    "defaults": {
-                        "timestep_fs": 1.0,
-                        "equil_ps": 100,
-                        "prod_ps": 500,
-                        "HFACF_window_ps": 200
-                    }
-                },
-                "kaldo": {
-                    "enabled": True,
-                    "execution": {
-                    },
-                    "defaults": {
-                        "k_mesh": [10, 10, 10],
-                        "method": "rta"
-                    }
-                }
-            },
+            "codes": {},
             "storage": {
                 "base_path": "/tmp/mcg/data"
             },
@@ -118,13 +84,6 @@ class Config:
         
         return code_config
     
-    def get_lammps_config(self) -> Dict[str, Any]:
-        """Get LAMMPS-specific configuration"""
-        return self.get_code_config("lammps")
-    
-    def get_kaldo_config(self) -> Dict[str, Any]:
-        """Get kALDo-specific configuration"""
-        return self.get_code_config("kaldo")
     
     def get_execution_mode(self, code: str) -> str:
         """Get execution mode for a code (docker, local, hpc)"""
@@ -192,24 +151,24 @@ def get_config() -> Config:
     return Config()
 
 
-# Convenience functions for common operations
-def get_lammps_executable() -> str:
-    """Get LAMMPS executable path based on execution mode"""
+# Generic convenience functions for any code
+def get_code_executable(code: str) -> str:
+    """Get executable path for any code based on execution mode"""
     config = get_config()
-    lammps_config = config.get_lammps_config()
-    mode = lammps_config["execution"]["mode"]
-    
+    code_config = config.get_code_config(code)
+    mode = code_config["execution"]["mode"]
+
     if mode == "docker":
-        return lammps_config["execution"]["docker"]["command"]
+        return code_config["execution"]["docker"]["command"]
     elif mode == "local":
-        return lammps_config["execution"]["local"]["executable"]
+        return code_config["execution"]["local"]["executable"]
     elif mode == "hpc":
-        return lammps_config["execution"]["hpc"]["executable"]
+        return code_config["execution"]["hpc"]["executable"]
     else:
         raise ValueError(f"Unknown execution mode: {mode}")
 
 
-def get_lammps_defaults() -> Dict[str, Any]:
-    """Get default LAMMPS simulation parameters"""
+def get_code_defaults(code: str) -> Dict[str, Any]:
+    """Get default parameters for any code"""
     config = get_config()
-    return config.get("codes.lammps.defaults", {})
+    return config.get(f"codes.{code}.defaults", {})
