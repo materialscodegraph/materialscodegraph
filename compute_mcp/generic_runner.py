@@ -59,19 +59,154 @@ class GenericRunner:
             # Determine method using config logic only
             method = self._resolve_method(config, params)
 
-            # Get template configuration for execution
-            template_config = config.get('templates', {}).get(method)
-            if not template_config:
-                raise ValueError(f"No template found for method: {method}")
+            # Get method configuration for execution
+            method_config = config.get('methods', {}).get(method)
+            if not method_config:
+                available_methods = list(config.get('methods', {}).keys())
+                raise ValueError(f"No method configuration found for: {method}. Available methods: {available_methods}")
 
-            print(f"=== Executing {config.get('name')} - {method} ===")
-            print(f"Parameters: {params}")
+            print(f"▶ {config.get('name')} {method}")
 
-            # Simple execution - just run the script from template
-            script_template = template_config.get('script_template', template_config.get('script', ''))
+            # Handle input templates if specified
+            input_template = method_config.get('input_template')
+            template_file = method_config.get('template_file')
+
+            if template_file or input_template:
+                # Start with parameter defaults from method config
+                parameter_defaults = method_config.get('parameter_defaults', {})
+                format_params = parameter_defaults.copy()
+
+                # Log parameter defaults being used
+                if parameter_defaults:
+                    defaults_used = []
+                    for key, default_value in parameter_defaults.items():
+                        if key not in params:
+                            defaults_used.append(f"{key}={default_value}")
+
+                    if defaults_used:
+                        print(f"  Using defaults: {', '.join(defaults_used)}")
+
+                # Override with actual parameters
+                format_params.update(params)
+
+                # Log which parameters were overridden
+                if parameter_defaults:
+                    overrides = []
+                    for key in params:
+                        if key in parameter_defaults and params[key] != parameter_defaults[key]:
+                            overrides.append(f"{key}: {parameter_defaults[key]} → {params[key]}")
+
+                    if overrides:
+                        print(f"  Parameter overrides: {', '.join(overrides)}")
+
+                # Handle special parameter transformations
+                calculated_params = []
+
+                if 'supercell' in format_params and isinstance(format_params['supercell'], list):
+                    if len(format_params['supercell']) >= 3:
+                        format_params['supercell_x'] = format_params['supercell'][0]
+                        format_params['supercell_y'] = format_params['supercell'][1]
+                        format_params['supercell_z'] = format_params['supercell'][2]
+                        calculated_params.append(f"supercell_x/y/z from supercell={format_params['supercell']}")
+
+                if 'temperature' in format_params and isinstance(format_params['temperature'], list):
+                    # Convert Kelvin to LJ units (rough approximation: T_lj = T_K / 300)
+                    temp_k = format_params['temperature'][0]
+                    temp_lj = max(1.0, temp_k / 300.0)
+                    format_params['temp_single'] = temp_lj
+                    calculated_params.append(f"temp_single={temp_lj:.3f} (from {temp_k}K → LJ units)")
+
+                # Generate mass commands and calculate atom_types
+                if 'masses' in format_params:
+                    mass_commands = []
+                    for i, mass in enumerate(format_params['masses'], 1):
+                        mass_commands.append(f"mass {i} {mass}")
+                    format_params['mass_commands'] = "\\n".join(mass_commands)
+                    calculated_params.append(f"mass_commands from masses={format_params['masses']}")
+
+                    # Calculate atom_types from number of masses if not explicitly set
+                    if 'atom_types' not in format_params:
+                        format_params['atom_types'] = len(format_params['masses'])
+                        calculated_params.append(f"atom_types={len(format_params['masses'])} (from number of masses)")
+                else:
+                    format_params['mass_commands'] = "mass 1 1.0"
+                    calculated_params.append("mass_commands=default single species")
+                    if 'atom_types' not in format_params:
+                        format_params['atom_types'] = 1
+                        calculated_params.append("atom_types=1 (default single species)")
+
+                # Generate pair_coeff commands
+                if 'pair_coeffs' in format_params:
+                    pair_coeff_commands = []
+                    for coeff in format_params['pair_coeffs']:
+                        i = coeff.get('i', 1)
+                        j = coeff.get('j', 1)
+                        epsilon = coeff.get('epsilon', 1.0)
+                        sigma = coeff.get('sigma', 1.0)
+                        pair_coeff_commands.append(f"pair_coeff {i} {j} {epsilon} {sigma}")
+                    format_params['pair_coeff_commands'] = "\\n".join(pair_coeff_commands)
+                    calculated_params.append(f"pair_coeff_commands from {len(format_params['pair_coeffs'])} pair interactions")
+                else:
+                    format_params['pair_coeff_commands'] = "pair_coeff 1 1 1.0 1.0"
+                    calculated_params.append("pair_coeff_commands=default LJ interaction")
+
+                # Log all calculated parameters
+                if calculated_params:
+                    print(f"  Calculated parameters: {', '.join(calculated_params)}")
+
+                # Get template content
+                if template_file:
+                    # Load from file
+                    template_path = Path(template_file)
+                    if not template_path.is_absolute():
+                        template_path = Path(__file__).parent.parent / template_file
+
+                    try:
+                        with open(template_path, 'r') as f:
+                            template_content = f.read()
+                    except FileNotFoundError:
+                        raise ValueError(f"Template file not found: {template_path}")
+                else:
+                    # Use inline template - handle both string and array formats
+                    if isinstance(input_template, list):
+                        template_content = '\n'.join(input_template)
+                    else:
+                        template_content = input_template
+
+                # Substitute parameters in template content
+                try:
+                    # Handle escaped newlines in JSON strings
+                    template_content = template_content.replace('\\n', '\n').replace('\\"', '"')
+                    formatted_content = template_content.format(**format_params)
+                except KeyError as e:
+                    raise ValueError(f"Missing parameter in template: {e}. Available: {list(format_params.keys())}")
+
+                # Write the input file
+                with open('input.lammps', 'w') as f:
+                    f.write(formatted_content)
+
+                print(f"  Generated input file")
+
+            # Execute the script template
+            script_template = method_config.get('script_template', method_config.get('script', ''))
             if script_template:
-                # Prepare parameters for substitution
-                format_params = dict(params)
+                # Start with parameter defaults from method config
+                script_parameter_defaults = method_config.get('parameter_defaults', {})
+                format_params = script_parameter_defaults.copy()
+
+                # Log script parameter defaults being used (only new ones not already logged)
+                if script_parameter_defaults:
+                    script_defaults_used = []
+                    for key, default_value in script_parameter_defaults.items():
+                        if key not in params:
+                            script_defaults_used.append(f"{key}={default_value}")
+
+                    # Only log if we haven't already logged these defaults
+                    if script_defaults_used and not (input_template or template_file):
+                        print(f"  Using script defaults: {', '.join(script_defaults_used)}")
+
+                # Override with actual parameters
+                format_params.update(params)
 
                 # Handle special parameter transformations
                 if 'supercell' in params and isinstance(params['supercell'], list):
@@ -84,8 +219,17 @@ class GenericRunner:
                     # Use first temperature for single-temp simulations
                     format_params['temp_single'] = params['temperature'][0]
 
-                # Substitute parameters in script
-                formatted_script = script_template.format(**format_params)
+                # Substitute parameters in script, handling missing optional parameters
+                try:
+                    # First, ensure all expected placeholders have values or empty strings
+                    import re
+                    placeholders = re.findall(r'\{(\w+)\}', script_template)
+                    for placeholder in placeholders:
+                        if placeholder not in format_params:
+                            format_params[placeholder] = ''
+                    formatted_script = script_template.format(**format_params)
+                except KeyError as e:
+                    raise ValueError(f"Missing parameter in script template: {e}. Available: {list(format_params.keys())}")
 
                 # Load .env file and substitute environment variables
                 import string
@@ -96,33 +240,59 @@ class GenericRunner:
                     # .env file loading is optional
                     pass
                 formatted_script = string.Template(formatted_script).safe_substitute(os.environ)
-                print(f"Running: {formatted_script}")
+                print(f"  Executing...")
 
                 import subprocess
+                # Get timeout from method config or fall back to global config
+                method_timeout = method_config.get('execution', {}).get('timeout')
+                global_timeout = config.get('execution', {}).get('local', {}).get('timeout')
+                default_timeout = 60
+
+                if method_timeout:
+                    timeout = method_timeout
+                    print(f"  Using method-specific timeout: {timeout}s")
+                elif global_timeout:
+                    timeout = global_timeout
+                    print(f"  Using global config timeout: {timeout}s")
+                else:
+                    timeout = default_timeout
+                    print(f"  Using default timeout: {timeout}s")
+
                 result = subprocess.run(
                     formatted_script,
                     shell=True,
                     capture_output=True,
                     text=True,
-                    timeout=config.get('execution', {}).get('local', {}).get('timeout', 60)
+                    timeout=timeout
                 )
 
                 if result.returncode == 0:
-                    print(f"Output: {result.stdout}")
+                    print(f"  ✓ Completed")
                     run_obj.status = "done"
                 else:
-                    print(f"Error: {result.stderr}")
+                    print(f"  ✗ Failed: {result.stderr.strip()}")
                     run_obj.status = "error"
             else:
-                print("No script defined in template")
+                print("  No script defined")
                 run_obj.status = "done"
 
             run_obj.ended_at = datetime.utcnow().isoformat()
 
-            # Create simple output assets based on template outputs
+            # Create simple output assets based on method outputs
             assets_to_return = []
-            outputs = template_config.get('outputs', {})
-            for output_name, output_file in outputs.items():
+            outputs = method_config.get('outputs', [])
+            for output_spec in outputs:
+                # Handle both old dict format and new array format
+                if isinstance(output_spec, dict):
+                    output_name = output_spec.get('name', 'unknown')
+                    output_file = output_spec.get('file', 'unknown.dat')
+                    output_type = output_spec.get('type', 'data')
+                else:
+                    # Legacy format fallback
+                    output_name = str(output_spec)
+                    output_file = f"{output_name}.dat"
+                    output_type = 'data'
+
                 asset = Asset(
                     type="Artifact",
                     id=generate_id("Artifact"),
@@ -130,7 +300,8 @@ class GenericRunner:
                         "name": output_name,
                         "content": f"Mock {output_name} data from {config.get('name')}",
                         "method": method,
-                        "parameters": params
+                        "parameters": params,
+                        "output_type": output_type
                     },
                     uri=f"mock://{output_file}",
                     hash="mock_hash_" + generate_id("hash")[:8]
@@ -163,6 +334,11 @@ class GenericRunner:
 
     def _find_config(self, runner_kind: str) -> Dict:
         """Find configuration for runner_kind using only config data"""
+        # Handle None or empty runner_kind
+        if not runner_kind:
+            available_names = sorted(set(cfg.get('name', key) for key, cfg in self.configs.items()))
+            raise ValueError(f"No runner_kind specified. Available runners: {available_names}")
+
         config = None
 
         # Try exact matches first
@@ -179,8 +355,8 @@ class GenericRunner:
                     break
 
         if not config:
-            available = list(self.configs.keys())
-            raise ValueError(f"No configuration found for runner: {runner_kind}. Available: {available}")
+            available_names = sorted(set(cfg.get('name', key) for key, cfg in self.configs.items()))
+            raise ValueError(f"No configuration found for runner: {runner_kind}. Available runners: {available_names}")
 
         return config
 
@@ -188,7 +364,12 @@ class GenericRunner:
         """Resolve method using config's resolution logic"""
         # First check if method is explicitly provided
         if 'method' in params:
-            return params['method']
+            method = params['method']
+            # Validate the method exists in config
+            if method in config.get('methods', {}):
+                return method
+            else:
+                print(f"Warning: Method '{method}' not found in config. Available methods: {list(config.get('methods', {}).keys())}")
 
         # Use config's method resolution rules
         method_rules = config.get('method_resolution', {})
@@ -203,10 +384,10 @@ class GenericRunner:
             if self._matches_understanding(phrase, details, params):
                 return details.get('method', phrase)
 
-        # Use methods mapping from config
+        # Use first available method from methods dict
         methods = config.get('methods', {})
         if methods:
-            return list(methods.values())[0]
+            return list(methods.keys())[0]
 
         # Fall back to capabilities
         capabilities = config.get('capabilities', [])

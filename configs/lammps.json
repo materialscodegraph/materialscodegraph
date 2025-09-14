@@ -1,52 +1,286 @@
 {
   "name": "LAMMPS",
-  "description": "Molecular dynamics thermal transport calculations",
-
-  "capabilities": [
-    "thermal_conductivity"
-  ],
+  "description": "Molecular dynamics simulations for materials properties",
 
   "methods": {
-    "thermal_conductivity": "green_kubo"
-  },
-
-  "required_parameters": [
-    "temperature",
-    "supercell"
-  ],
-
-  "optional_parameters": [
-    "timestep",
-    "equilibration_time",
-    "production_time"
-  ],
-
-  "parameter_types": {
-    "temperature": "list[int]",
-    "supercell": "list[int,int,int]",
-    "timestep": "float",
-    "equilibration_time": "int",
-    "production_time": "int"
-  },
-
-  "produces": [
-    "thermal_conductivity_results"
-  ],
-
-  "templates": {
     "green_kubo": {
-      "needs": ["temperature", "supercell"],
-      "script_template": "echo 'Running {property} calculation for {material_id}'; echo 'Parameters: Temperature={temperature}, Supercell={supercell}'; echo '# LAMMPS Green-Kubo thermal conductivity for {material_id}' > input.lammps; echo 'units lj' >> input.lammps; echo 'atom_style atomic' >> input.lammps; echo 'boundary p p p' >> input.lammps; echo 'lattice fcc 0.8' >> input.lammps; echo 'region box block 0 8 0 8 0 8' >> input.lammps; echo 'create_box 1 box' >> input.lammps; echo 'create_atoms 1 box' >> input.lammps; echo 'mass 1 1.0' >> input.lammps; echo 'pair_style lj/cut 2.5' >> input.lammps; echo 'pair_coeff 1 1 1.0 1.0' >> input.lammps; echo 'velocity all create 1.0 12345' >> input.lammps; echo '# Equilibration phase' >> input.lammps; echo 'fix 1 all nvt temp 1.0 1.0 0.1' >> input.lammps; echo 'timestep 0.005' >> input.lammps; echo 'thermo 1000' >> input.lammps; echo 'run 10000' >> input.lammps; echo '# Production phase for heat flux correlation' >> input.lammps; echo 'compute flux all heat/flux' >> input.lammps; echo 'fix 2 all ave/correlate 10 1000 10000 c_flux[1] c_flux[2] c_flux[3] type auto file hfacf.dat' >> input.lammps; echo 'run 50000' >> input.lammps; echo 'print \"Green-Kubo thermal conductivity simulation completed\"' >> input.lammps; $LAMMPS_EXECUTABLE -in input.lammps -log lammps.log; echo 'LAMMPS thermal conductivity simulation completed - check hfacf.dat for results'",
-      "outputs": {
-        "thermal_conductivity": "kappa.dat"
-      }
-    }
-  },
+      "description": "Green-Kubo method for thermal conductivity calculation",
+      "capability": "thermal_conductivity",
 
-  "execution": {
-    "local": {
-      "command": "bash",
-      "timeout": 300
+      "required_parameters": [
+        "temperature",
+        "supercell"
+      ],
+
+      "optional_parameters": [
+        "timestep",
+        "equilibration_steps",
+        "production_steps",
+        "masses",
+        "pair_coeffs",
+        "units",
+        "atom_style",
+        "boundary",
+        "lattice_style",
+        "lattice_constant",
+        "pair_style",
+        "pair_cutoff",
+        "thermostat",
+        "thermostat_damping",
+        "thermo_freq",
+        "random_seed",
+        "atom_types"
+      ],
+
+      "parameter_types": {
+        "temperature": "list[float]",
+        "supercell": "list[int,int,int]",
+        "timestep": "float",
+        "equilibration_steps": "int",
+        "production_steps": "int",
+        "masses": "list[float]",
+        "pair_coeffs": "list[object]",
+        "units": "string",
+        "atom_style": "string",
+        "boundary": "string",
+        "lattice_style": "string",
+        "lattice_constant": "float",
+        "pair_style": "string",
+        "pair_cutoff": "float",
+        "thermostat": "string",
+        "thermostat_damping": "float",
+        "thermo_freq": "int",
+        "random_seed": "int",
+        "atom_types": "int"
+      },
+
+      "parameter_defaults": {
+        "property": "thermal_conductivity",
+        "timestep": 0.005,
+        "equilibration_steps": 10000,
+        "production_steps": 50000,
+        "masses": [1.0],
+        "pair_coeffs": [
+          {"i": 1, "j": 1, "epsilon": 1.0, "sigma": 1.0}
+        ],
+        "units": "lj",
+        "atom_style": "atomic",
+        "boundary": "p p p",
+        "lattice_style": "fcc",
+        "lattice_constant": 0.8,
+        "pair_style": "lj/cut",
+        "pair_cutoff": 2.5,
+        "thermostat": "nvt",
+        "thermostat_damping": 0.1,
+        "thermo_freq": 1000,
+        "random_seed": 12345,
+        "atom_types": 1
+      },
+
+      "input_template": [
+        "# Simulation for {material_id}",
+        "# Property: {property}",
+        "# Parameters: Temperature={temperature}, Supercell={supercell}",
+        "",
+        "units {units}",
+        "atom_style {atom_style}",
+        "boundary {boundary}",
+        "",
+        "# Create system using supercell parameters",
+        "lattice {lattice_style} {lattice_constant}",
+        "region box block 0 {supercell_x} 0 {supercell_y} 0 {supercell_z}",
+        "create_box {atom_types} box",
+        "create_atoms 1 box",
+        "",
+        "# Define masses",
+        "{mass_commands}",
+        "",
+        "# Define potential",
+        "pair_style {pair_style} {pair_cutoff}",
+        "{pair_coeff_commands}",
+        "",
+        "# Initialize velocities at temperature",
+        "velocity all create {temp_single} {random_seed}",
+        "",
+        "# Equilibration phase",
+        "fix 1 all {thermostat} temp {temp_single} {temp_single} {thermostat_damping}",
+        "timestep {timestep}",
+        "thermo {thermo_freq}",
+        "run {equilibration_steps}",
+        "",
+        "# Production phase for Green-Kubo",
+        "unfix 1",
+        "fix 1 all {thermostat} temp {temp_single} {temp_single} {thermostat_damping}",
+        "compute flux all heat/flux ke pe pair",
+        "fix 2 all ave/correlate 1 1000 {production_steps} c_flux[1] c_flux[2] c_flux[3] type auto ave running file kappa.dat",
+        "run {production_steps}",
+        "",
+        "print \"{property} calculation completed for {material_id}\""
+      ],
+
+      "script_template": "echo 'Running {property} calculation for {material_id}' && echo 'Parameters: Temperature={temperature}, Supercell={supercell}' && $LAMMPS_EXECUTABLE -in input.lammps -log lammps.log && echo 'LAMMPS simulation completed'",
+
+      "outputs": [
+        {
+          "name": "thermal_conductivity",
+          "file": "kappa.dat",
+          "type": "correlation_function"
+        },
+        {
+          "name": "simulation_log",
+          "file": "lammps.log",
+          "type": "log"
+        }
+      ],
+
+      "execution": {
+        "command": "bash",
+        "timeout": 1800
+      }
+    },
+
+    "nemd": {
+      "description": "Non-equilibrium molecular dynamics for thermal conductivity",
+      "capability": "thermal_conductivity",
+
+      "required_parameters": [
+        "temperature",
+        "supercell",
+        "heat_flux"
+      ],
+
+      "optional_parameters": [
+        "timestep",
+        "equilibration_steps",
+        "production_steps",
+        "masses",
+        "pair_coeffs",
+        "units",
+        "atom_style",
+        "boundary",
+        "lattice_style",
+        "lattice_constant",
+        "pair_style",
+        "pair_cutoff",
+        "thermostat",
+        "thermostat_damping",
+        "thermo_freq",
+        "random_seed"
+      ],
+
+      "parameter_types": {
+        "temperature": "list[float]",
+        "supercell": "list[int,int,int]",
+        "heat_flux": "float",
+        "timestep": "float",
+        "equilibration_steps": "int",
+        "production_steps": "int",
+        "masses": "list[float]",
+        "pair_coeffs": "list[object]",
+        "units": "string",
+        "atom_style": "string",
+        "boundary": "string",
+        "lattice_style": "string",
+        "lattice_constant": "float",
+        "pair_style": "string",
+        "pair_cutoff": "float",
+        "thermostat": "string",
+        "thermostat_damping": "float",
+        "thermo_freq": "int",
+        "random_seed": "int"
+      },
+
+      "parameter_defaults": {
+        "heat_flux": 0.1,
+        "timestep": 0.005,
+        "equilibration_steps": 10000,
+        "production_steps": 50000,
+        "masses": [1.0],
+        "pair_coeffs": [
+          {"i": 1, "j": 1, "epsilon": 1.0, "sigma": 1.0}
+        ],
+        "units": "lj",
+        "atom_style": "atomic",
+        "boundary": "p p p",
+        "lattice_style": "fcc",
+        "lattice_constant": 0.8,
+        "pair_style": "lj/cut",
+        "pair_cutoff": 2.5,
+        "thermostat": "nvt",
+        "thermostat_damping": 0.1,
+        "thermo_freq": 1000,
+        "random_seed": 12345
+      },
+
+      "input_template": [
+        "# NEMD Simulation for {material_id}",
+        "# Property: {property}",
+        "# Parameters: Temperature={temperature}, Supercell={supercell}, Heat Flux={heat_flux}",
+        "",
+        "units {units}",
+        "atom_style {atom_style}",
+        "boundary {boundary}",
+        "",
+        "# Create system",
+        "lattice {lattice_style} {lattice_constant}",
+        "region box block 0 {supercell_x} 0 {supercell_y} 0 {supercell_z}",
+        "create_box {atom_types} box",
+        "create_atoms 1 box",
+        "",
+        "# Define masses",
+        "{mass_commands}",
+        "",
+        "# Define potential",
+        "pair_style {pair_style} {pair_cutoff}",
+        "{pair_coeff_commands}",
+        "",
+        "# Initialize velocities",
+        "velocity all create {temp_single} {random_seed}",
+        "",
+        "# Equilibration",
+        "fix 1 all {thermostat} temp {temp_single} {temp_single} {thermostat_damping}",
+        "timestep {timestep}",
+        "thermo {thermo_freq}",
+        "run {equilibration_steps}",
+        "",
+        "# NEMD setup",
+        "unfix 1",
+        "region hot block INF INF INF INF 0 2",
+        "region cold block INF INF INF INF {supercell_z_minus_2} INF",
+        "compute Thot all temp/region hot",
+        "compute Tcold all temp/region cold",
+        "fix hot all langevin {temp_hot} {temp_hot} {thermostat_damping} {random_seed} tally yes",
+        "fix cold all langevin {temp_cold} {temp_cold} {thermostat_damping} {random_seed} tally yes",
+        "fix 3 all nve",
+        "compute ke all ke/atom",
+        "variable temp atom c_ke/1.5",
+        "compute layers all chunk/atom bin/1d z center 1.0",
+        "fix 4 all ave/chunk 100 100 10000 layers v_temp file temperature_profile.dat",
+        "thermo_style custom step temp c_Thot c_Tcold",
+        "run {production_steps}",
+        "",
+        "print \"{property} NEMD calculation completed for {material_id}\""
+      ],
+
+      "script_template": "echo 'Running NEMD {property} calculation for {material_id}' && echo 'Parameters: Temperature={temperature}, Supercell={supercell}, Heat Flux={heat_flux}' && $LAMMPS_EXECUTABLE -in input.lammps -log lammps.log && echo 'NEMD simulation completed'",
+
+      "outputs": [
+        {
+          "name": "temperature_profile",
+          "file": "temperature_profile.dat",
+          "type": "profile"
+        },
+        {
+          "name": "simulation_log",
+          "file": "lammps.log",
+          "type": "log"
+        }
+      ],
+
+      "execution": {
+        "command": "bash",
+        "timeout": 1800
+      }
     }
   }
 }

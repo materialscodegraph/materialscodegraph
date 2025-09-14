@@ -30,14 +30,28 @@ class MCGClient:
             asset_ids = self.memory.put_assets(plan["assets"])
         else:
             asset_ids = []
-        
+
+        # Infer runner_kind if not specified
+        runner_kind = plan.get("runner_kind")
+        if not runner_kind:
+            runner_kind = self._infer_runner_kind(plan.get("params", {}))
+            if runner_kind:
+                print(f"📊 Inferred runner: {runner_kind}")
+            else:
+                # Get available runners from compute MCP
+                available_runners = self.compute.get_available_runners()
+                print("❌ Could not infer runner_kind from parameters")
+                print(f"   Available runners: {', '.join(available_runners)}")
+                print("   Hint: Add runner_kind to plan or use parameters that clearly indicate the runner")
+                return None
+
         # Start the computation
         run = self.compute.start(
-            runner_kind=plan["runner_kind"],
+            runner_kind=runner_kind,
             asset_ids=asset_ids,
             params=plan.get("params", {})
         )
-        
+
         # Handle both Run objects and dictionaries
         if hasattr(run, 'id'):
             return run.id
@@ -45,6 +59,54 @@ class MCGClient:
             return run["id"]
         else:
             return str(run)
+
+    def _infer_runner_kind(self, params: Dict[str, Any]) -> str:
+        """Infer runner kind from parameters using configuration metadata"""
+        try:
+            from compute_mcp.generic_runner import GenericRunner
+            runner = GenericRunner()
+
+            # Score each runner based on parameter matches
+            scores = {}
+
+            for key, config in runner.configs.items():
+                runner_name = config.get('name', key)
+                score = 0
+
+                # Check if params match any method's required parameters
+                for method_name, method_config in config.get('methods', {}).items():
+                    required = method_config.get('required_parameters', [])
+                    optional = method_config.get('optional_parameters', [])
+
+                    # Higher score for matching required parameters
+                    for param in required:
+                        if param in params:
+                            score += 2
+
+                    # Lower score for matching optional parameters
+                    for param in optional:
+                        if param in params:
+                            score += 1
+
+                    # Bonus for exact method match
+                    if 'method' in params and params['method'] == method_name:
+                        score += 5
+
+                scores[runner_name] = score
+
+            # Return runner with highest score if significant
+            if scores:
+                best_runner = max(scores, key=scores.get)
+                if scores[best_runner] > 0:
+                    return best_runner
+
+            return None
+
+        except Exception:
+            # Fallback to simple heuristics if config loading fails
+            if any(key in params for key in ['temperature', 'supercell']):
+                return 'LAMMPS'
+            return None
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Check run status"""
@@ -164,6 +226,22 @@ class ComputeMCP:
             "status": "done",
             "eta": None
         }
+
+    def get_available_runners(self) -> list:
+        """Get list of available runners from loaded configurations"""
+        try:
+            from compute_mcp.generic_runner import GenericRunner
+            runner = GenericRunner()
+            # Get runner names from loaded configs
+            available = []
+            for key, config in runner.configs.items():
+                name = config.get('name', key)
+                if name not in available:
+                    available.append(name)
+            return sorted(available)
+        except Exception:
+            # Fallback if unable to load configs
+            return ["Unknown - check configuration files"]
     
     def results(self, run_id: str) -> Dict[str, Any]:
         """Retrieve actual results from memory"""
@@ -555,6 +633,7 @@ def _parse_workflow_definition(workflow: str) -> list:
     workflow_mappings = {
         "fetch_then_kappa": ["MaterialsProject", "LAMMPS"],
         "fetch_then_thermal": ["MaterialsProject", "LAMMPS"],
+        "fetch_then_lammps": ["MaterialsProject", "LAMMPS"],
         "mp_then_lammps": ["MaterialsProject", "LAMMPS"],
         "materialsproject_then_lammps": ["MaterialsProject", "LAMMPS"],
         "green_kubo": ["LAMMPS"],

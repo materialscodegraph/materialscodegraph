@@ -110,9 +110,9 @@ class InterfacesTools:
             else:
                 workflow = list(config.get('methods', {}).values())[0] if config.get('methods') else "default"
 
-            # Check if we need multiple runners for a workflow based on extracted parameters
-            workflow = self._check_multi_step_workflow(task_lower, runner_kind, params, workflow)
-        
+        # Always check if we need a multi-step workflow, regardless of single runner match
+        workflow = self._check_multi_step_workflow(task_lower, runner_kind, params, workflow)
+
         # Create params asset if we have params
         if params:
             params_asset = Asset(
@@ -331,11 +331,31 @@ Example response format:
     def _check_multi_step_workflow(self, task_lower: str, runner_kind: str, params: Dict, workflow: str) -> str:
         """Check if we need a multi-step workflow based on parameters and context"""
 
-        # If we have both material_id and thermal properties, suggest fetch-then-calculate workflow
-        has_material_fetch = 'material_id' in params
-        has_thermal_calc = any(term in task_lower for term in ['thermal', 'conductivity', 'kappa'])
+        # Check for material-specific calculations that need fetching
+        has_material_id = 'material_id' in params
+        has_mp_reference = any(term in task_lower for term in ['mp-']) # Only explicit Materials Project references
+        # Use word boundaries to avoid false matches like "si" in "simulation"
+        import re
+        material_patterns = [r'\bsilicon\b', r'\bsi\b', r'\bgaas\b', r'\bgraphene\b', r'\bgermanium\b', r'\bge\b']
+        has_specific_material = any(re.search(pattern, task_lower) for pattern in material_patterns) and 'mp-' not in task_lower
 
-        if has_material_fetch and has_thermal_calc:
-            return "fetch_then_kappa"
+        # Check for calculation types
+        has_thermal_calc = any(term in task_lower for term in ['thermal', 'conductivity', 'kappa', 'heat'])
+        has_lammps_calc = any(term in task_lower for term in ['lammps', 'molecular dynamics', 'md'])
+        has_simulation_params = any(param in params for param in ['temperature', 'supercell', 'timestep'])
 
+        # Only suggest multi-step workflow if we have clear material identification
+        needs_material_fetch = has_material_id or has_mp_reference or (has_specific_material and (has_thermal_calc or has_lammps_calc))
+
+        # Determine if we need multi-step workflow
+        if needs_material_fetch:
+            # Need to fetch material data first, then calculate
+            if has_thermal_calc or 'conductivity' in task_lower:
+                return "fetch_then_kappa"
+            elif 'thermal' in task_lower:
+                return "fetch_then_thermal"
+            elif has_lammps_calc or has_simulation_params:
+                return "fetch_then_lammps"
+
+        # Return original workflow if no multi-step needed
         return workflow
