@@ -81,6 +81,15 @@ plan.json
 test_plan.json
 kaldo_plan.json
 
+# Generated files
+input.lammps
+properties.json
+structure.json
+lammps.log
+
+# Claude local settings
+.claude/
+
 # Simulation outputs
 *.log
 *.out

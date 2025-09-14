@@ -17,7 +17,6 @@ import string
 
 from common.schema import Asset, Edge, Run
 from common.ids import asset_id, generate_id
-from common.io import write_uri
 
 
 class GenericRunner:
