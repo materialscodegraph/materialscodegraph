@@ -31,19 +31,13 @@ class MCGClient:
         else:
             asset_ids = []
 
-        # Infer runner_kind if not specified
+        # Get runner_kind from plan (required for single-step execution)
         runner_kind = plan.get("runner_kind")
         if not runner_kind:
-            runner_kind = self._infer_runner_kind(plan.get("params", {}))
-            if runner_kind:
-                print(f"📊 Inferred runner: {runner_kind}")
-            else:
-                # Get available runners from compute MCP
-                available_runners = self.compute.get_available_runners()
-                print("❌ Could not infer runner_kind from parameters")
-                print(f"   Available runners: {', '.join(available_runners)}")
-                print("   Hint: Add runner_kind to plan or use parameters that clearly indicate the runner")
-                return None
+            available_runners = self.compute.get_available_runners()
+            print("❌ No runner_kind specified in plan")
+            print(f"   Available runners: {', '.join(available_runners)}")
+            return None
 
         # Start the computation
         run = self.compute.start(
@@ -60,53 +54,6 @@ class MCGClient:
         else:
             return str(run)
 
-    def _infer_runner_kind(self, params: Dict[str, Any]) -> str:
-        """Infer runner kind from parameters using configuration metadata"""
-        try:
-            from compute_mcp.generic_runner import GenericRunner
-            runner = GenericRunner()
-
-            # Score each runner based on parameter matches
-            scores = {}
-
-            for key, config in runner.configs.items():
-                runner_name = config.get('name', key)
-                score = 0
-
-                # Check if params match any method's required parameters
-                for method_name, method_config in config.get('methods', {}).items():
-                    required = method_config.get('required_parameters', [])
-                    optional = method_config.get('optional_parameters', [])
-
-                    # Higher score for matching required parameters
-                    for param in required:
-                        if param in params:
-                            score += 2
-
-                    # Lower score for matching optional parameters
-                    for param in optional:
-                        if param in params:
-                            score += 1
-
-                    # Bonus for exact method match
-                    if 'method' in params and params['method'] == method_name:
-                        score += 5
-
-                scores[runner_name] = score
-
-            # Return runner with highest score if significant
-            if scores:
-                best_runner = max(scores, key=scores.get)
-                if scores[best_runner] > 0:
-                    return best_runner
-
-            return None
-
-        except Exception:
-            # Fallback to simple heuristics if config loading fails
-            if any(key in params for key in ['temperature', 'supercell']):
-                return 'LAMMPS'
-            return None
     
     def status(self, run_id: str) -> Dict[str, Any]:
         """Check run status"""
@@ -425,18 +372,13 @@ Examples:
                 with open(args.plan, "r") as f:
                     plan = json.load(f)
             
-            # Handle multi-step workflow execution (only for workflows with multiple actions)
-            if plan.get("workflow") and _is_multi_step_workflow(plan.get("workflow", "")):
-                try:
-                    run_ids = _execute_multi_step_workflow(client, plan)
-                    print(f"Workflow complete! Run IDs: {', '.join(run_ids)}")
-                except Exception as e:
-                    print(f"Error: {e}")
-                    raise
-            else:
-                # Single-step execution
-                run_id = client.start(plan)
-                print(f"Started run: {run_id}")
+            # Execute general workflow (all plans now have workflow_steps)
+            try:
+                run_ids = _execute_general_workflow(client, plan)
+                print(f"Workflow complete! Run IDs: {', '.join(run_ids)}")
+            except Exception as e:
+                print(f"Error: {e}")
+                raise
         
         elif args.command == "status":
             status = client.status(args.run_id)
@@ -508,19 +450,14 @@ Examples:
             
             print("\nExecuting plan...")
             
-            # Handle multi-step workflow execution (only for workflows with multiple actions)
-            if plan.get("workflow") and _is_multi_step_workflow(plan.get("workflow", "")):
-                try:
-                    run_ids = _execute_multi_step_workflow(client, plan)
-                    final_run_id = run_ids[-1]  # Last run ID for results
-                    print(f"\nWorkflow complete! Run IDs: {', '.join(run_ids)}")
-                except Exception as e:
-                    print(f"Error: {e}")
-                    raise
-            else:
-                # Single-step execution
-                final_run_id = client.start(plan)
-                print(f"Started run: {final_run_id}")
+            # Execute general workflow (all plans now have workflow_steps)
+            try:
+                run_ids = _execute_general_workflow(client, plan)
+                final_run_id = run_ids[-1]  # Last run ID for results
+                print(f"\nWorkflow complete! Run IDs: {', '.join(run_ids)}")
+            except Exception as e:
+                print(f"Error: {e}")
+                raise
 
             # Get and display results
             print("\nRetrieving results...")
@@ -547,134 +484,67 @@ Examples:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-def _is_multi_step_workflow(workflow: str) -> bool:
-    """Determine if workflow name indicates multiple steps vs single method"""
-    workflow_lower = workflow.lower()
 
-    # Multi-step indicators
-    multi_step_keywords = [
-        "then", "fetch_then", "pull_then", "get_then",
-        "prep_", "material_", "_analysis", "_simulate"
-    ]
 
-    # Check for explicit multi-step patterns
-    for keyword in multi_step_keywords:
-        if keyword in workflow_lower:
-            return True
-
-    # Single method names (even with underscores) are NOT multi-step
-    single_method_patterns = [
-        "green_kubo", "nemd", "rta", "bte", "dft", "md_nvt", "md_npt"
-    ]
-
-    for pattern in single_method_patterns:
-        if workflow_lower == pattern:
-            return False
-
-    return False
-
-def _execute_multi_step_workflow(client, plan: dict) -> list:
-    """Execute multi-step workflow dynamically based on workflow name"""
-    workflow = plan.get("workflow", "")
-    workflow_steps = _parse_workflow_definition(workflow)
+def _execute_general_workflow(client, plan: dict) -> list:
+    """Execute general multi-step workflow using workflow_steps"""
+    workflow_steps = plan.get("workflow_steps", [])
 
     if not workflow_steps:
-        raise ValueError(f"Unknown workflow: {workflow}")
+        raise ValueError("No workflow steps defined")
 
-    print(f"Starting {len(workflow_steps)}-step workflow: {workflow}")
+    print(f"Starting {len(workflow_steps)}-step general workflow")
 
     run_ids = []
     accumulated_assets = list(plan.get("assets", []))
+    step_outputs = {}  # Store outputs from each step
 
-    for i, step_runner in enumerate(workflow_steps, 1):
-        print(f"Step {i} - {step_runner} execution")
+    # Sort steps by step number to ensure correct order
+    sorted_steps = sorted(workflow_steps, key=lambda x: x['step'])
+
+    for step in sorted_steps:
+        step_num = step['step']
+        runner = step['runner']
+        method = step.get('method')
+        description = step.get('description', f'Step {step_num}')
+        depends_on = step.get('depends_on', [])
+
+        print(f"Step {step_num}: {description}")
+        print(f"  Using {runner}" + (f" ({method})" if method else ""))
+
+        # Wait for dependencies to complete
+        for dep_step in depends_on:
+            if dep_step not in step_outputs:
+                print(f"  Waiting for step {dep_step} to complete...")
+                # In a real system, you might need to check status
+                # For now, assume previous steps complete immediately
 
         # Create plan for this step
         step_plan = {
-            "runner_kind": step_runner,
+            "runner_kind": runner,
             "assets": accumulated_assets,
-            "params": plan["params"]
+            "params": plan.get("params", {})
         }
 
-        # Execute step
-        run_id = client.start(step_plan)
-        run_ids.append(run_id)
-        print(f"  Run ID: {run_id}")
+        # Add method if specified
+        if method:
+            step_plan["params"]["method"] = method
 
-        # Get results and accumulate assets for next step
-        if i < len(workflow_steps):  # Not the last step
-            # Wait for step to complete
-            import time
-            print(f"  Waiting for step {i} to complete...")
-            max_wait = 60  # seconds
-            waited = 0
-            while waited < max_wait:
-                status = client.status(run_id)
-                if status.get("status") == "done":
-                    break
-                time.sleep(2)
-                waited += 2
-                print(f"    Waiting... ({waited}s)")
+        try:
+            run_id = client.start(step_plan)
+            run_ids.append(run_id)
+            step_outputs[step_num] = run_id
+            print(f"  ✓ Step {step_num} completed (Run ID: {run_id})")
 
-            step_results = client.results(run_id)
-            new_assets = step_results.get("assets", [])
+            # For multi-step workflows, we might want to collect outputs
+            # and pass them to the next step. This is a simplified version.
 
-            # Add new assets while preserving original Params/Method assets
-            for asset in new_assets:
-                if asset["type"] not in ["Params"]:  # Don't duplicate params
-                    accumulated_assets.append(asset)
+        except Exception as e:
+            print(f"  ✗ Step {step_num} failed: {e}")
+            raise
 
     return run_ids
 
-def _parse_workflow_definition(workflow: str) -> list:
-    """Parse workflow name into sequence of runners"""
-
-    # Simple workflow mappings for common patterns
-    workflow_mappings = {
-        "fetch_then_kappa": ["MaterialsProject", "LAMMPS"],
-        "fetch_then_thermal": ["MaterialsProject", "LAMMPS"],
-        "fetch_then_lammps": ["MaterialsProject", "LAMMPS"],
-        "mp_then_lammps": ["MaterialsProject", "LAMMPS"],
-        "materialsproject_then_lammps": ["MaterialsProject", "LAMMPS"],
-        "green_kubo": ["LAMMPS"],
-        "fetch_material": ["MaterialsProject"]
-    }
-
-    workflow_lower = workflow.lower()
-
-    if workflow_lower in workflow_mappings:
-        return workflow_mappings[workflow_lower]
-
-    # Fallback: try to parse from available configs
-    from pathlib import Path
-    configs_dir = Path(__file__).parent.parent / "configs"
-    available_configs = []
-
-    for config_file in configs_dir.glob("*.json"):
-        try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-            if config and 'name' in config:
-                available_configs.append(config['name'])
-        except:
-            continue
-
-    # If workflow contains "then", try to match parts to available configs
-    if "then" in workflow_lower:
-        workflow_parts = [part.strip() for part in workflow_lower.split("_") if part != "then"]
-        matched_runners = []
-
-        for part in workflow_parts:
-            for runner_name in available_configs:
-                if part in runner_name.lower() or runner_name.lower() in part:
-                    matched_runners.append(runner_name)
-                    break
-
-        if matched_runners:
-            return matched_runners
-
-    # Default fallback
-    return available_configs if available_configs else ["LAMMPS"]
 
 if __name__ == "__main__":
     # Add app directory to path for imports

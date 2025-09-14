@@ -45,21 +45,17 @@ class InterfacesTools:
     def plan(self, nl_task: str, context_assets: Optional[List[Asset]] = None) -> Dict[str, Any]:
         """Parse natural language task and create execution plan using configuration-driven approach"""
 
-        # Parse the natural language task
-        task_lower = nl_task.lower()
-
         # Initialize plan components
-        runner_kind = None
         assets = []
         params = {}
-        workflow = None
         missing = []
 
         # Build parameter schema from all configurations for AI
         all_parameters = set()
         for config_name, config in self.configs.items():
-            all_parameters.update(config.get('required_parameters', []))
-            all_parameters.update(config.get('optional_parameters', []))
+            for method_name, method_config in config.get('methods', {}).items():
+                all_parameters.update(method_config.get('required_parameters', []))
+                all_parameters.update(method_config.get('optional_parameters', []))
 
         # Create parameter mapping for AI (simple mapping - parameter name to itself)
         all_param_mappings = {param: [param] for param in all_parameters}
@@ -67,51 +63,8 @@ class InterfacesTools:
         # Extract parameters using AI with all available parameters
         self._extract_parameters_from_task(nl_task, params, all_param_mappings, missing)
 
-        # Now find the best matching configuration for execution
-        best_match = None
-        best_score = 0
-
-        for config_name, config in self.configs.items():
-            capabilities = config.get('capabilities', [])
-            score = 0
-            matched_capabilities = []
-
-            # Check if task matches any of this runner's capabilities
-            for capability in capabilities:
-                capability_words = capability.lower().replace('_', ' ').split()
-
-                # Check if all capability words appear in task
-                if all(word in task_lower for word in capability_words):
-                    score += len(capability_words)
-                    matched_capabilities.append(capability)
-
-                # Also check for partial matches
-                elif any(word in task_lower for word in capability_words):
-                    score += 1
-                    matched_capabilities.append(capability)
-
-            if score > best_score:
-                best_score = score
-                best_match = {
-                    'config_name': config_name,
-                    'config': config,
-                    'matched_capabilities': matched_capabilities,
-                    'score': score
-                }
-
-        if best_match:
-            runner_kind = best_match['config_name']
-            config = best_match['config']
-
-            # Determine workflow method from config
-            matched_capability = best_match['matched_capabilities'][0] if best_match['matched_capabilities'] else None
-            if matched_capability:
-                workflow = config.get('methods', {}).get(matched_capability, matched_capability)
-            else:
-                workflow = list(config.get('methods', {}).values())[0] if config.get('methods') else "default"
-
-        # Always check if we need a multi-step workflow, regardless of single runner match
-        workflow = self._check_multi_step_workflow(task_lower, runner_kind, params, workflow)
+        # Use LLM to create a general workflow plan
+        workflow_steps = self._create_workflow_plan(nl_task, params)
 
         # Create params asset if we have params
         if params:
@@ -121,14 +74,152 @@ class InterfacesTools:
                 payload=params
             )
             assets.append(params_asset)
-        
-        return {
-            "runner_kind": runner_kind,
+
+        # Create the plan with workflow steps
+        plan = {
             "assets": assets,
             "params": params,
-            "workflow": workflow,
-            "missing": missing
+            "workflow": "multi_step_workflow",
+            "missing": missing,
+            "workflow_steps": workflow_steps
         }
+
+        return plan
+
+    def _create_workflow_plan(self, task: str, params: Dict) -> List[Dict]:
+        """Use LLM to create a general workflow plan with any number of steps"""
+
+        # Get available tools and their capabilities
+        available_tools = self._get_available_tools()
+
+        # Create prompt for LLM workflow planning
+        workflow_prompt = f"""
+Task: {task}
+Parameters extracted: {params}
+
+Available computational tools and their capabilities:
+"""
+
+        for tool_name, tool_info in available_tools.items():
+            workflow_prompt += f"\n{tool_name}:\n"
+            for method_name, method_info in tool_info['methods'].items():
+                workflow_prompt += f"  - {method_name}: {method_info['description']}\n"
+                workflow_prompt += f"    Requires: {', '.join(method_info.get('required_parameters', []))}\n"
+                if method_info.get('outputs'):
+                    outputs = [out.get('name', out) if isinstance(out, dict) else out for out in method_info['outputs']]
+                    workflow_prompt += f"    Produces: {', '.join(outputs)}\n"
+
+        workflow_prompt += f"""
+
+Please analyze this task and break it down into a sequence of computational steps.
+
+Respond with a JSON array of steps, where each step has:
+- "step": step number (1, 2, 3, ...)
+- "description": what this step does
+- "runner": which tool to use (exact name from available tools)
+- "method": which method within that tool
+- "depends_on": array of step numbers this step depends on (empty array if no dependencies)
+
+Example response for "Calculate thermal conductivity for mp-149 silicon":
+[
+  {{
+    "step": 1,
+    "description": "Fetch material structure and properties for mp-149 silicon",
+    "runner": "MaterialsProject",
+    "method": "fetch_material",
+    "depends_on": []
+  }},
+  {{
+    "step": 2,
+    "description": "Calculate thermal conductivity using molecular dynamics simulation",
+    "runner": "LAMMPS",
+    "method": "green_kubo",
+    "depends_on": [1]
+  }}
+]
+
+For single-step tasks like "Run LAMMPS with temperature 400K", respond with:
+[
+  {{
+    "step": 1,
+    "description": "Run LAMMPS molecular dynamics simulation",
+    "runner": "LAMMPS",
+    "method": "green_kubo",
+    "depends_on": []
+  }}
+]
+
+Workflow plan for the given task:"""
+
+        try:
+            # Use AI to create workflow plan
+            from anthropic import Anthropic
+            import os
+            import json
+
+            client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+
+            response = client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=1000,
+                temperature=0.1,
+                messages=[{
+                    "role": "user",
+                    "content": workflow_prompt
+                }]
+            )
+
+            workflow_response = response.content[0].text.strip()
+
+            # Extract JSON from response
+            import re
+            json_match = re.search(r'\[.*\]', workflow_response, re.DOTALL)
+            if json_match:
+                workflow_json = json_match.group(0)
+                workflow_steps = json.loads(workflow_json)
+
+                # Validate and clean the steps
+                validated_steps = []
+                for step in workflow_steps:
+                    if all(key in step for key in ['step', 'runner', 'method']):
+                        validated_steps.append(step)
+
+                return validated_steps
+            else:
+                print("Could not parse workflow JSON from LLM response")
+                return []
+
+        except Exception as e:
+            print(f"LLM workflow planning failed: {e}")
+            # Fallback: create a simple single-step plan
+            return [{
+                "step": 1,
+                "description": f"Execute task: {task}",
+                "runner": "LAMMPS",  # Default fallback
+                "method": "green_kubo",
+                "depends_on": []
+            }]
+
+    def _get_available_tools(self) -> Dict:
+        """Get available tools and their capabilities from configs"""
+        tools = {}
+
+        for config_name, config in self.configs.items():
+            tool_name = config.get('name', config_name)
+            tools[tool_name] = {
+                'description': config.get('description', ''),
+                'methods': {}
+            }
+
+            for method_name, method_config in config.get('methods', {}).items():
+                tools[tool_name]['methods'][method_name] = {
+                    'description': method_config.get('description', f'{method_name} method'),
+                    'required_parameters': method_config.get('required_parameters', []),
+                    'optional_parameters': method_config.get('optional_parameters', []),
+                    'outputs': method_config.get('outputs', [])
+                }
+
+        return tools
     
     def explain(self, results_assets: List[Asset], ledger_slice: List[Edge]) -> str:
         """Generate human-readable explanation of results"""
@@ -328,34 +419,3 @@ Example response format:
 
         return best_method
 
-    def _check_multi_step_workflow(self, task_lower: str, runner_kind: str, params: Dict, workflow: str) -> str:
-        """Check if we need a multi-step workflow based on parameters and context"""
-
-        # Check for material-specific calculations that need fetching
-        has_material_id = 'material_id' in params
-        has_mp_reference = any(term in task_lower for term in ['mp-']) # Only explicit Materials Project references
-        # Use word boundaries to avoid false matches like "si" in "simulation"
-        import re
-        material_patterns = [r'\bsilicon\b', r'\bsi\b', r'\bgaas\b', r'\bgraphene\b', r'\bgermanium\b', r'\bge\b']
-        has_specific_material = any(re.search(pattern, task_lower) for pattern in material_patterns) and 'mp-' not in task_lower
-
-        # Check for calculation types
-        has_thermal_calc = any(term in task_lower for term in ['thermal', 'conductivity', 'kappa', 'heat'])
-        has_lammps_calc = any(term in task_lower for term in ['lammps', 'molecular dynamics', 'md'])
-        has_simulation_params = any(param in params for param in ['temperature', 'supercell', 'timestep'])
-
-        # Only suggest multi-step workflow if we have clear material identification
-        needs_material_fetch = has_material_id or has_mp_reference or (has_specific_material and (has_thermal_calc or has_lammps_calc))
-
-        # Determine if we need multi-step workflow
-        if needs_material_fetch:
-            # Need to fetch material data first, then calculate
-            if has_thermal_calc or 'conductivity' in task_lower:
-                return "fetch_then_kappa"
-            elif 'thermal' in task_lower:
-                return "fetch_then_thermal"
-            elif has_lammps_calc or has_simulation_params:
-                return "fetch_then_lammps"
-
-        # Return original workflow if no multi-step needed
-        return workflow
