@@ -320,7 +320,7 @@ Examples:
     # Scan command
     scan_parser = subparsers.add_parser("scan", help="Scan simulation code repository and generate config")
     scan_parser.add_argument("repo_path", help="Path to repository to scan")
-    scan_parser.add_argument("--code", help="Code type (auto-detect if not specified)")
+    scan_parser.add_argument("--code", required=True, help="Target simulation code to scan for (e.g., 'kaldo', 'lammps', 'quantum_espresso')")
     scan_parser.add_argument("-o", "--output", help="Output config file path (default: configs/<code>.json)")
     
     # Run command (combines plan and start)
@@ -342,8 +342,7 @@ Examples:
         from interfaces_mcp.repo_scanner import scan_repository
 
         print(f"🔍 Scanning repository: {args.repo_path}")
-        if args.code:
-            print(f"📋 Code type: {args.code}")
+        print(f"🎯 Target code: {args.code} (filtering for this code only)")
 
         try:
             # Determine output path - always save by default

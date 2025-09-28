@@ -10,64 +10,68 @@
         "atoms"
       ],
       "optional_parameters": [
+        "kpts",
         "is_classic",
         "temperature",
-        "third_bandwidth",
-        "broadening_shape",
-        "storage",
-        "supercell",
-        "folder",
-        "kpts",
-        "include_isotopes",
-        "is_balanced",
-        "grid_type",
         "is_unfolding",
+        "storage",
+        "folder",
+        "third_bandwidth",
+        "supercell",
         "lmpcmds",
         "keep_alive",
-        "log_file"
+        "log_file",
+        "broadening_shape",
+        "is_nw",
+        "include_isotopes",
+        "is_balanced"
       ],
       "parameter_types": {
         "forceconstants": "string",
+        "kpts": "list[int]",
         "is_classic": "boolean",
         "temperature": "int",
-        "third_bandwidth": "string",
-        "broadening_shape": "string",
+        "is_unfolding": "boolean",
         "storage": "string",
+        "folder": "string",
+        "third_bandwidth": "string",
         "atoms": "string",
         "supercell": "string",
-        "folder": "string",
-        "kpts": "string",
-        "include_isotopes": "boolean",
-        "is_balanced": "boolean",
-        "grid_type": "string",
-        "is_unfolding": "string",
         "lmpcmds": "list",
         "keep_alive": "boolean",
         "log_file": "string",
-        "is_nw": "boolean"
+        "broadening_shape": "string",
+        "is_nw": "boolean",
+        "include_isotopes": "boolean",
+        "is_balanced": "boolean",
+        "grid_type": "string"
       },
       "default_parameters": {
         "forceconstants": "forceconstants",
+        "kpts": [
+          3,
+          3,
+          3
+        ],
         "is_classic": false,
         "temperature": 300,
-        "third_bandwidth": "1 / 4.135",
-        "broadening_shape": "triangle",
+        "is_unfolding": true,
         "storage": "memory",
+        "folder": "data",
+        "third_bandwidth": "0.05 / 4.135",
         "atoms": "atoms",
         "supercell": "supercell",
-        "folder": "fc_c_diamond",
-        "kpts": "[k_points, k_points, k_points]",
-        "include_isotopes": true,
-        "is_balanced": true,
-        "grid_type": "C",
-        "is_unfolding": "unfold_bool",
         "lmpcmds": [
           "pair_style tersoff",
           "pair_coeff * * forcefields/C.tersoff C"
         ],
         "keep_alive": true,
         "log_file": "lammps-c-diamond.log",
-        "is_nw": true
+        "broadening_shape": "triangle",
+        "is_nw": true,
+        "include_isotopes": true,
+        "is_balanced": true,
+        "grid_type": "C"
       },
       "input_template": [
         "# phonon_dispersion calculation for {material_id}",
@@ -101,56 +105,6 @@
         "timeout": 3600
       }
     },
-    "force_constants": {
-      "description": "force_constants calculation",
-      "capability": "force_constants",
-      "required_parameters": [
-        "atoms"
-      ],
-      "optional_parameters": [
-        "folder",
-        "supercell"
-      ],
-      "parameter_types": {
-        "atoms": "string",
-        "folder": "string",
-        "supercell": "list[int]"
-      },
-      "default_parameters": {
-        "atoms": "atoms",
-        "folder": "folder_string + '/ald'",
-        "supercell": [
-          5,
-          5,
-          5
-        ]
-      },
-      "input_template": [
-        "# force_constants calculation for {material_id}",
-        "from kaldo.forceconstants import ForceConstants",
-        "from kaldo.phonons import Phonons",
-        "",
-        "# Load force constants",
-        "forceconstants = ForceConstants.from_folder('{forceconstants_source}')",
-        "",
-        "# Configure calculation",
-        "config = {",
-        "    'atoms': {atoms},",
-        "}"
-      ],
-      "script_template": "python {script_name}.py",
-      "outputs": [
-        {
-          "name": "output",
-          "file": "output.log",
-          "type": "log"
-        }
-      ],
-      "execution": {
-        "command": "python",
-        "timeout": 3600
-      }
-    },
     "thermal_conductivity": {
       "description": "thermal_conductivity calculation",
       "capability": "thermal_conductivity",
@@ -160,61 +114,35 @@
       ],
       "optional_parameters": [
         "storage",
+        "max_n_iterations",
         "diffusivity_bandwidth",
         "n_iterations",
-        "max_n_iterations",
         "length",
-        "finite_length_method",
-        "figure.figsize",
-        "legend.fontsize",
-        "axes.labelsize",
-        "axes.titlesize",
-        "xtick.labelsize",
-        "ytick.labelsize",
-        "1728"
+        "finite_length_method"
       ],
       "parameter_types": {
         "phonons": "string",
         "method": "string",
         "storage": "string",
-        "diffusivity_bandwidth": "string",
-        "n_iterations": "int",
         "max_n_iterations": "int",
+        "diffusivity_bandwidth": "float",
+        "n_iterations": "int",
         "length": "any",
-        "finite_length_method": "string",
-        "figure.figsize": "any",
-        "legend.fontsize": "int",
-        "axes.labelsize": "int",
-        "axes.titlesize": "int",
-        "xtick.labelsize": "int",
-        "ytick.labelsize": "int",
-        "1728": "list[float]"
+        "finite_length_method": "string"
       },
       "default_parameters": {
         "phonons": "phonons",
         "method": "qhgk",
         "storage": "memory",
-        "diffusivity_bandwidth": "phonons.bandwidth.reshape((phonons.n_k_points, phonons.n_modes))",
-        "n_iterations": 20,
         "max_n_iterations": 71,
+        "diffusivity_bandwidth": 0.025,
+        "n_iterations": 20,
         "length": [
-          10000.0,
           0,
-          0
+          0,
+          1000000000
         ],
-        "finite_length_method": "ms",
-        "figure.figsize": [
-          12,
-          8
-        ],
-        "legend.fontsize": 20,
-        "axes.labelsize": 20,
-        "axes.titlesize": 24,
-        "xtick.labelsize": 18,
-        "ytick.labelsize": 18,
-        "1728": [
-          0.1
-        ]
+        "finite_length_method": "ms"
       },
       "input_template": [
         "# thermal_conductivity calculation for {material_id}",
@@ -243,24 +171,32 @@
         "timeout": 3600
       }
     },
-    "band_structure": {
-      "description": "band_structure calculation",
-      "capability": "band_structure",
+    "force_constants": {
+      "description": "force_constants calculation",
+      "capability": "force_constants",
       "required_parameters": [
-        "dos",
-        "bandwidth"
+        "atoms"
       ],
-      "optional_parameters": [],
+      "optional_parameters": [
+        "supercell",
+        "folder"
+      ],
       "parameter_types": {
-        "dos": "any",
-        "bandwidth": "any"
+        "atoms": "string",
+        "supercell": "list[int]",
+        "folder": "string"
       },
       "default_parameters": {
-        "dos": null,
-        "bandwidth": null
+        "atoms": "atoms",
+        "supercell": [
+          5,
+          5,
+          5
+        ],
+        "folder": "td"
       },
       "input_template": [
-        "# band_structure calculation for {material_id}",
+        "# force_constants calculation for {material_id}",
         "from kaldo.forceconstants import ForceConstants",
         "from kaldo.phonons import Phonons",
         "",
@@ -269,21 +205,15 @@
         "",
         "# Configure calculation",
         "config = {",
-        "    'dos': {dos},",
-        "    'bandwidth': {bandwidth},",
+        "    'atoms': {atoms},",
         "}"
       ],
       "script_template": "python {script_name}.py",
       "outputs": [
         {
-          "name": "band_structure",
-          "file": "bands.dat",
-          "type": "data"
-        },
-        {
-          "name": "optimized_structure",
-          "file": "structure.out",
-          "type": "structure"
+          "name": "output",
+          "file": "output.log",
+          "type": "log"
         }
       ],
       "execution": {

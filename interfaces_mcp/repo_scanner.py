@@ -450,6 +450,18 @@ class RepoScanner:
                     for name in node.names:
                         imports.append(f"{module}.{name.name}")
 
+            # Filter: Only process files that import the target code
+            if self.code_name in CODE_SIGNATURES:
+                target_imports = CODE_SIGNATURES[self.code_name]['imports']
+                has_target_import = any(
+                    any(target_imp.lower() in imp.lower() for target_imp in target_imports)
+                    for imp in imports
+                )
+
+                # If no target imports found, skip this file
+                if not has_target_import:
+                    return patterns
+
             # Extract method calls and configurations
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
@@ -469,11 +481,19 @@ class RepoScanner:
     def _extract_call_pattern(self, node: ast.Call, file_path: Path, imports: List[str], content: str) -> Optional[CodePattern]:
         """Extract pattern from a function call"""
         try:
-            # Get function name
+            # Get function name and calling context
+            skill_name = None
+            calling_module = None
+
             if isinstance(node.func, ast.Name):
                 skill_name = node.func.id
             elif isinstance(node.func, ast.Attribute):
                 skill_name = node.func.attr
+                # Try to get the module/object being called
+                if isinstance(node.func.value, ast.Name):
+                    calling_module = node.func.value.id
+                elif isinstance(node.func.value, ast.Attribute):
+                    calling_module = ast.unparse(node.func.value)
             else:
                 return None
 
@@ -483,19 +503,41 @@ class RepoScanner:
             if skill_name in skip_functions:
                 return None
 
-            # Check if this is a relevant method for the detected code
+            # Check if this is a relevant method for the TARGET code only
             relevant = False
             if self.code_name in CODE_SIGNATURES:
-                for cls in CODE_SIGNATURES[self.code_name]['classes']:
-                    if cls.lower() in skill_name.lower():
-                        relevant = True
-                        break
-                for keyword in CODE_SIGNATURES[self.code_name]['keywords']:
-                    if keyword.lower() in skill_name.lower():
-                        relevant = True
-                        break
+                target_signatures = CODE_SIGNATURES[self.code_name]
 
-            if not relevant and self.code_name != 'generic':
+                # Check if calling module matches target code
+                if calling_module:
+                    # If we have a calling module, check if it's from target code
+                    for target_import in target_signatures['imports']:
+                        if target_import.lower() in calling_module.lower():
+                            relevant = True
+                            break
+
+                # If no module context, check class/keyword patterns
+                if not relevant:
+                    for cls in target_signatures['classes']:
+                        if cls.lower() in skill_name.lower():
+                            # But only if it's actually imported
+                            for imp in imports:
+                                if self.code_name.lower() in imp.lower():
+                                    relevant = True
+                                    break
+                            break
+
+                    if not relevant:
+                        for keyword in target_signatures['keywords']:
+                            if keyword.lower() in skill_name.lower():
+                                # But only if target code is imported
+                                for imp in imports:
+                                    if self.code_name.lower() in imp.lower():
+                                        relevant = True
+                                        break
+                                break
+
+            if not relevant:
                 return None
 
             # Extract parameters
