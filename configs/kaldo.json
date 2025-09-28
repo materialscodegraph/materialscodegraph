@@ -1,0 +1,300 @@
+{
+  "name": "kaldo",
+  "description": "KALDO - Anharmonic Lattice Dynamics package for thermal transport",
+  "skills": {
+    "phonon_dispersion": {
+      "description": "phonon_dispersion calculation",
+      "capability": "phonon_dispersion",
+      "required_parameters": [
+        "forceconstants",
+        "atoms"
+      ],
+      "optional_parameters": [
+        "is_classic",
+        "temperature",
+        "third_bandwidth",
+        "broadening_shape",
+        "storage",
+        "supercell",
+        "folder",
+        "kpts",
+        "include_isotopes",
+        "is_balanced",
+        "grid_type",
+        "is_unfolding",
+        "lmpcmds",
+        "keep_alive",
+        "log_file"
+      ],
+      "parameter_types": {
+        "forceconstants": "string",
+        "is_classic": "boolean",
+        "temperature": "int",
+        "third_bandwidth": "string",
+        "broadening_shape": "string",
+        "storage": "string",
+        "atoms": "string",
+        "supercell": "string",
+        "folder": "string",
+        "kpts": "string",
+        "include_isotopes": "boolean",
+        "is_balanced": "boolean",
+        "grid_type": "string",
+        "is_unfolding": "string",
+        "lmpcmds": "list",
+        "keep_alive": "boolean",
+        "log_file": "string",
+        "is_nw": "boolean"
+      },
+      "default_parameters": {
+        "forceconstants": "forceconstants",
+        "is_classic": false,
+        "temperature": 300,
+        "third_bandwidth": "1 / 4.135",
+        "broadening_shape": "triangle",
+        "storage": "memory",
+        "atoms": "atoms",
+        "supercell": "supercell",
+        "folder": "fc_c_diamond",
+        "kpts": "[k_points, k_points, k_points]",
+        "include_isotopes": true,
+        "is_balanced": true,
+        "grid_type": "C",
+        "is_unfolding": "unfold_bool",
+        "lmpcmds": [
+          "pair_style tersoff",
+          "pair_coeff * * forcefields/C.tersoff C"
+        ],
+        "keep_alive": true,
+        "log_file": "lammps-c-diamond.log",
+        "is_nw": true
+      },
+      "input_template": [
+        "# phonon_dispersion calculation for {material_id}",
+        "from kaldo.forceconstants import ForceConstants",
+        "from kaldo.phonons import Phonons",
+        "",
+        "# Load force constants",
+        "forceconstants = ForceConstants.from_folder('{forceconstants_source}')",
+        "",
+        "# Configure calculation",
+        "config = {",
+        "    'forceconstants': {forceconstants},",
+        "    'atoms': {atoms},",
+        "}"
+      ],
+      "script_template": "python {script_name}.py",
+      "outputs": [
+        {
+          "name": "phonon_frequencies",
+          "file": "frequencies.dat",
+          "type": "data"
+        },
+        {
+          "name": "phonon_dos",
+          "file": "dos.dat",
+          "type": "data"
+        }
+      ],
+      "execution": {
+        "command": "python",
+        "timeout": 3600
+      }
+    },
+    "force_constants": {
+      "description": "force_constants calculation",
+      "capability": "force_constants",
+      "required_parameters": [
+        "atoms"
+      ],
+      "optional_parameters": [
+        "folder",
+        "supercell"
+      ],
+      "parameter_types": {
+        "atoms": "string",
+        "folder": "string",
+        "supercell": "list[int]"
+      },
+      "default_parameters": {
+        "atoms": "atoms",
+        "folder": "folder_string + '/ald'",
+        "supercell": [
+          5,
+          5,
+          5
+        ]
+      },
+      "input_template": [
+        "# force_constants calculation for {material_id}",
+        "from kaldo.forceconstants import ForceConstants",
+        "from kaldo.phonons import Phonons",
+        "",
+        "# Load force constants",
+        "forceconstants = ForceConstants.from_folder('{forceconstants_source}')",
+        "",
+        "# Configure calculation",
+        "config = {",
+        "    'atoms': {atoms},",
+        "}"
+      ],
+      "script_template": "python {script_name}.py",
+      "outputs": [
+        {
+          "name": "output",
+          "file": "output.log",
+          "type": "log"
+        }
+      ],
+      "execution": {
+        "command": "python",
+        "timeout": 3600
+      }
+    },
+    "thermal_conductivity": {
+      "description": "thermal_conductivity calculation",
+      "capability": "thermal_conductivity",
+      "required_parameters": [
+        "phonons",
+        "method"
+      ],
+      "optional_parameters": [
+        "storage",
+        "diffusivity_bandwidth",
+        "n_iterations",
+        "max_n_iterations",
+        "length",
+        "finite_length_method",
+        "figure.figsize",
+        "legend.fontsize",
+        "axes.labelsize",
+        "axes.titlesize",
+        "xtick.labelsize",
+        "ytick.labelsize",
+        "1728"
+      ],
+      "parameter_types": {
+        "phonons": "string",
+        "method": "string",
+        "storage": "string",
+        "diffusivity_bandwidth": "string",
+        "n_iterations": "int",
+        "max_n_iterations": "int",
+        "length": "any",
+        "finite_length_method": "string",
+        "figure.figsize": "any",
+        "legend.fontsize": "int",
+        "axes.labelsize": "int",
+        "axes.titlesize": "int",
+        "xtick.labelsize": "int",
+        "ytick.labelsize": "int",
+        "1728": "list[float]"
+      },
+      "default_parameters": {
+        "phonons": "phonons",
+        "method": "qhgk",
+        "storage": "memory",
+        "diffusivity_bandwidth": "phonons.bandwidth.reshape((phonons.n_k_points, phonons.n_modes))",
+        "n_iterations": 20,
+        "max_n_iterations": 71,
+        "length": [
+          10000.0,
+          0,
+          0
+        ],
+        "finite_length_method": "ms",
+        "figure.figsize": [
+          12,
+          8
+        ],
+        "legend.fontsize": 20,
+        "axes.labelsize": 20,
+        "axes.titlesize": 24,
+        "xtick.labelsize": 18,
+        "ytick.labelsize": 18,
+        "1728": [
+          0.1
+        ]
+      },
+      "input_template": [
+        "# thermal_conductivity calculation for {material_id}",
+        "from kaldo.forceconstants import ForceConstants",
+        "from kaldo.phonons import Phonons",
+        "",
+        "# Load force constants",
+        "forceconstants = ForceConstants.from_folder('{forceconstants_source}')",
+        "",
+        "# Configure calculation",
+        "config = {",
+        "    'phonons': {phonons},",
+        "    'method': {method},",
+        "}"
+      ],
+      "script_template": "python {script_name}.py",
+      "outputs": [
+        {
+          "name": "thermal_conductivity",
+          "file": "thermal_conductivity.dat",
+          "type": "data"
+        }
+      ],
+      "execution": {
+        "command": "python",
+        "timeout": 3600
+      }
+    },
+    "band_structure": {
+      "description": "band_structure calculation",
+      "capability": "band_structure",
+      "required_parameters": [
+        "dos",
+        "bandwidth"
+      ],
+      "optional_parameters": [],
+      "parameter_types": {
+        "dos": "any",
+        "bandwidth": "any"
+      },
+      "default_parameters": {
+        "dos": null,
+        "bandwidth": null
+      },
+      "input_template": [
+        "# band_structure calculation for {material_id}",
+        "from kaldo.forceconstants import ForceConstants",
+        "from kaldo.phonons import Phonons",
+        "",
+        "# Load force constants",
+        "forceconstants = ForceConstants.from_folder('{forceconstants_source}')",
+        "",
+        "# Configure calculation",
+        "config = {",
+        "    'dos': {dos},",
+        "    'bandwidth': {bandwidth},",
+        "}"
+      ],
+      "script_template": "python {script_name}.py",
+      "outputs": [
+        {
+          "name": "band_structure",
+          "file": "bands.dat",
+          "type": "data"
+        },
+        {
+          "name": "optimized_structure",
+          "file": "structure.out",
+          "type": "structure"
+        }
+      ],
+      "execution": {
+        "command": "python",
+        "timeout": 3600
+      }
+    }
+  },
+  "supported_capabilities": [
+    "thermal_conductivity",
+    "phonon_dispersion",
+    "anharmonic_properties"
+  ]
+}

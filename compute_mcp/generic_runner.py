@@ -59,10 +59,10 @@ class GenericRunner:
             method = self._resolve_method(config, params)
 
             # Get method configuration for execution
-            method_config = config.get('methods', {}).get(method)
+            method_config = config.get('skills', {}).get(method)
             if not method_config:
-                available_methods = list(config.get('methods', {}).keys())
-                raise ValueError(f"No method configuration found for: {method}. Available methods: {available_methods}")
+                available_skills = list(config.get('skills', {}).keys())
+                raise ValueError(f"No method configuration found for: {method}. Available skills: {available_skills}")
 
             print(f"▶ {config.get('name')} {method}")
 
@@ -72,13 +72,13 @@ class GenericRunner:
 
             if template_file or input_template:
                 # Start with parameter defaults from method config
-                parameter_defaults = method_config.get('parameter_defaults', {})
-                format_params = parameter_defaults.copy()
+                default_parameters = method_config.get('default_parameters', {})
+                format_params = default_parameters.copy()
 
                 # Log parameter defaults being used
-                if parameter_defaults:
+                if default_parameters:
                     defaults_used = []
-                    for key, default_value in parameter_defaults.items():
+                    for key, default_value in default_parameters.items():
                         if key not in params:
                             defaults_used.append(f"{key}={default_value}")
 
@@ -89,11 +89,11 @@ class GenericRunner:
                 format_params.update(params)
 
                 # Log which parameters were overridden
-                if parameter_defaults:
+                if default_parameters:
                     overrides = []
                     for key in params:
-                        if key in parameter_defaults and params[key] != parameter_defaults[key]:
-                            overrides.append(f"{key}: {parameter_defaults[key]} → {params[key]}")
+                        if key in default_parameters and params[key] != default_parameters[key]:
+                            overrides.append(f"{key}: {default_parameters[key]} → {params[key]}")
 
                     if overrides:
                         print(f"  Parameter overrides: {', '.join(overrides)}")
@@ -190,13 +190,13 @@ class GenericRunner:
             script_template = method_config.get('script_template', method_config.get('script', ''))
             if script_template:
                 # Start with parameter defaults from method config
-                script_parameter_defaults = method_config.get('parameter_defaults', {})
-                format_params = script_parameter_defaults.copy()
+                script_default_parameters = method_config.get('default_parameters', {})
+                format_params = script_default_parameters.copy()
 
                 # Log script parameter defaults being used (only new ones not already logged)
-                if script_parameter_defaults:
+                if script_default_parameters:
                     script_defaults_used = []
-                    for key, default_value in script_parameter_defaults.items():
+                    for key, default_value in script_default_parameters.items():
                         if key not in params:
                             script_defaults_used.append(f"{key}={default_value}")
 
@@ -365,10 +365,10 @@ class GenericRunner:
         if 'method' in params:
             method = params['method']
             # Validate the method exists in config
-            if method in config.get('methods', {}):
+            if method in config.get('skills', {}):
                 return method
             else:
-                print(f"Warning: Method '{method}' not found in config. Available methods: {list(config.get('methods', {}).keys())}")
+                print(f"Warning: Method '{method}' not found in config. Available skills: {list(config.get('skills', {}).keys())}")
 
         # Use config's method resolution rules
         method_rules = config.get('method_resolution', {})
@@ -383,10 +383,10 @@ class GenericRunner:
             if self._matches_understanding(phrase, details, params):
                 return details.get('method', phrase)
 
-        # Use first available method from methods dict
-        methods = config.get('methods', {})
-        if methods:
-            return list(methods.keys())[0]
+        # Use first available skill from skills dict
+        skills = config.get('skills', {})
+        if skills:
+            return list(skills.keys())[0]
 
         # Fall back to capabilities
         capabilities = config.get('capabilities', [])

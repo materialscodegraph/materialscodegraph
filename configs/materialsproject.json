@@ -2,7 +2,7 @@
   "name": "MaterialsProject",
   "description": "Materials database for crystal structures and properties",
 
-  "methods": {
+  "skills": {
     "fetch_material": {
       "description": "Fetch material structure and basic properties from Materials Project",
       "capability": "material_data_retrieval",

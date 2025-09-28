@@ -286,6 +286,9 @@ Examples:
   mcg status R12345678
   mcg results R12345678
   mcg explain R12345678
+  mcg scan kaldo/
+  mcg scan /path/to/lammps --code lammps
+  mcg scan /path/to/repo -o my_config.json
         """
     )
     
@@ -313,6 +316,12 @@ Examples:
     # Explain command
     explain_parser = subparsers.add_parser("explain", help="Explain results")
     explain_parser.add_argument("run_id", help="Run ID to explain")
+
+    # Scan command
+    scan_parser = subparsers.add_parser("scan", help="Scan simulation code repository and generate config")
+    scan_parser.add_argument("repo_path", help="Path to repository to scan")
+    scan_parser.add_argument("--code", help="Code type (auto-detect if not specified)")
+    scan_parser.add_argument("-o", "--output", help="Output config file path (default: configs/<code>.json)")
     
     # Run command (combines plan and start)
     run_parser = subparsers.add_parser("run", help="Plan and execute task in one step")
@@ -326,9 +335,52 @@ Examples:
     if not args.command:
         parser.print_help()
         return
-    
+
+    # Handle scan command separately (doesn't need MCGClient)
+    if args.command == "scan":
+        # Import repo scanner
+        from interfaces_mcp.repo_scanner import scan_repository
+
+        print(f"🔍 Scanning repository: {args.repo_path}")
+        if args.code:
+            print(f"📋 Code type: {args.code}")
+
+        try:
+            # Determine output path - always save by default
+            if args.output:
+                output_path = args.output
+            else:
+                output_path = "auto"  # Auto-determine based on detected code
+
+            # Scan repository
+            config = scan_repository(
+                repo_path=args.repo_path,
+                code_name=args.code,
+                output_path=output_path
+            )
+
+            # Get the actual output path used
+            if output_path == "auto":
+                code_name = config.get('name', 'unknown')
+                output_path = f"configs/{code_name}.json"
+
+            # Print summary
+            print(f"\n✅ Scan complete for {config.get('name', 'unknown')}!")
+            print(f"📊 Found {len(config.get('skills', {}))} skills:")
+
+            for skill_name, skill in config.get('skills', {}).items():
+                capability = skill.get('capability', 'unknown')
+                print(f"   - {skill_name}: {capability}")
+
+            print(f"📁 Config saved to: {output_path}")
+
+        except Exception as e:
+            print(f"❌ Error scanning repository: {e}")
+            sys.exit(1)
+        return
+
     client = MCGClient()
-    
+
     try:
         if args.command == "plan":
             plan = client.plan(args.task)
@@ -409,6 +461,7 @@ Examples:
         elif args.command == "explain":
             explanation = client.explain(args.run_id)
             print(explanation)
+
         
         elif args.command == "run":
             # Combined plan and execute command

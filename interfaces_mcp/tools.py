@@ -53,7 +53,7 @@ class InterfacesTools:
         # Build parameter schema from all configurations for AI
         all_parameters = set()
         for config_name, config in self.configs.items():
-            for method_name, method_config in config.get('methods', {}).items():
+            for method_name, method_config in config.get('skills', {}).items():
                 all_parameters.update(method_config.get('required_parameters', []))
                 all_parameters.update(method_config.get('optional_parameters', []))
 
@@ -102,7 +102,7 @@ Available computational tools and their capabilities:
 
         for tool_name, tool_info in available_tools.items():
             workflow_prompt += f"\n{tool_name}:\n"
-            for method_name, method_info in tool_info['methods'].items():
+            for method_name, method_info in tool_info['skills'].items():
                 workflow_prompt += f"  - {method_name}: {method_info['description']}\n"
                 workflow_prompt += f"    Requires: {', '.join(method_info.get('required_parameters', []))}\n"
                 if method_info.get('outputs'):
@@ -208,11 +208,11 @@ Workflow plan for the given task:"""
             tool_name = config.get('name', config_name)
             tools[tool_name] = {
                 'description': config.get('description', ''),
-                'methods': {}
+                'skills': {}
             }
 
-            for method_name, method_config in config.get('methods', {}).items():
-                tools[tool_name]['methods'][method_name] = {
+            for method_name, method_config in config.get('skills', {}).items():
+                tools[tool_name]['skills'][method_name] = {
                     'description': method_config.get('description', f'{method_name} method'),
                     'required_parameters': method_config.get('required_parameters', []),
                     'optional_parameters': method_config.get('optional_parameters', []),

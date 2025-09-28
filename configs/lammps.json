@@ -2,7 +2,7 @@
   "name": "LAMMPS",
   "description": "Molecular dynamics simulations for materials properties",
 
-  "methods": {
+  "skills": {
     "green_kubo": {
       "description": "Green-Kubo method for thermal conductivity calculation",
       "capability": "thermal_conductivity",
@@ -54,7 +54,7 @@
         "atom_types": "int"
       },
 
-      "parameter_defaults": {
+      "default_parameters": {
         "property": "thermal_conductivity",
         "timestep": 0.005,
         "equilibration_steps": 10000,
@@ -190,7 +190,7 @@
         "random_seed": "int"
       },
 
-      "parameter_defaults": {
+      "default_parameters": {
         "heat_flux": 0.1,
         "timestep": 0.005,
         "equilibration_steps": 10000,

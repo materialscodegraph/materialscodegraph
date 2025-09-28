@@ -14,13 +14,13 @@ Each runner configuration file (e.g., `lammps.json`, `materialsproject.json`) fo
 }
 ```
 
-### Methods
-Each runner can support multiple computational methods:
+### Skills
+Each runner can support multiple computational skills:
 
 ```json
-"methods": {
-  "method_name": {
-    "description": "What this method calculates",
+"skills": {
+  "skill_name": {
+    "description": "What this skill calculates",
     "capability": "property_it_calculates",
     "required_parameters": ["param1", "param2"],
     "optional_parameters": ["param3", "param4"],
@@ -64,7 +64,7 @@ Templates can be either:
 ### LAMMPS (`lammps.json`)
 Molecular dynamics simulations for materials properties.
 
-**Methods:**
+**Skills:**
 - `green_kubo`: Green-Kubo method for thermal conductivity calculation
 - `nemd`: Non-equilibrium molecular dynamics
 
@@ -76,7 +76,7 @@ Molecular dynamics simulations for materials properties.
 ### Materials Project (`materialsproject.json`)
 Interface to the Materials Project database for crystal structures and properties.
 
-**Methods:**
+**Skills:**
 - `fetch_material`: Get material structure and properties by ID
 - `search_materials`: Search for materials by criteria
 - `get_structure`: Get detailed crystal structure
@@ -130,9 +130,9 @@ Example minimal configuration:
 {
   "name": "MyTool",
   "description": "Description of what MyTool does",
-  "methods": {
+  "skills": {
     "calculate": {
-      "description": "Main calculation method",
+      "description": "Main calculation skill",
       "required_parameters": ["input_param"],
       "parameter_types": {
         "input_param": "float"
@@ -149,11 +149,11 @@ Example minimal configuration:
 
 ## Best Practices
 
-1. **Clear naming**: Use descriptive method names that indicate what they calculate
+1. **Clear naming**: Use descriptive skill names that indicate what they calculate
 2. **Parameter documentation**: Include all parameters in `parameter_types`
 3. **Sensible defaults**: Provide defaults for optional parameters
 4. **Readable templates**: Use array format for multi-line templates
-5. **Proper timeouts**: Set appropriate timeouts for each method
+5. **Proper timeouts**: Set appropriate timeouts for each skill
 
 ## Notes
 

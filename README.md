@@ -33,7 +33,7 @@ python -m cli.mcg start --plan plan.json
 
 - **🤖 AI-Powered Parsing**: Claude AI intelligently extracts simulation parameters from natural language
 - **🗣️ Natural Language Interface**: No need to learn complex APIs or simulation inputs
-- **🔄 Multiple Methods**: Compare LAMMPS MD with MaterialsProject data in unified workflows
+- **🔄 Multiple Skills**: Compare LAMMPS MD with MaterialsProject data in unified workflows
 - **📊 Full Provenance**: Every calculation step is tracked with immutable lineage
 - **⚡ Smart Configuration**: Zero hardcoding - everything driven by JSON configuration files
 
@@ -458,7 +458,7 @@ materialscodegraph/
 └── docker-compose.yml            # Docker orchestration
 ```
 
-### Adding New Methods
+### Adding New Skills
 
 To add support for a new computational method (e.g., VASP):
 
