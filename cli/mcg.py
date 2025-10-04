@@ -368,8 +368,8 @@ Examples:
             print(f"📊 Found {len(config.get('skills', {}))} skills:")
 
             for skill_name, skill in config.get('skills', {}).items():
-                capability = skill.get('capability', 'unknown')
-                print(f"   - {skill_name}: {capability}")
+                description = skill.get('description', 'unknown')
+                print(f"   - {skill_name}: {description}")
 
             print(f"📁 Config saved to: {output_path}")
 

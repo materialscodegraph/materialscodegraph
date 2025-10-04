@@ -25,7 +25,7 @@ CODE_SIGNATURES = {
         'extensions': ['.py'],
         'classes': ['Phonons', 'ForceConstants', 'Conductivity'],
         'keywords': ['phonon', 'thermal_conductivity', 'anharmonic', 'force_constants'],
-        'capabilities': ['thermal_conductivity', 'phonon_dispersion', 'anharmonic_properties']
+        'skills': ['thermal_conductivity', 'phonon_dispersion', 'anharmonic_properties']
     },
     'lammps': {
         'imports': ['lammps', 'from lammps', 'import lammps', 'PyLammps'],
@@ -33,7 +33,7 @@ CODE_SIGNATURES = {
         'extensions': ['.lammps', '.in', '.data'],
         'classes': ['LAMMPS', 'PyLammps'],
         'keywords': ['pair_style', 'fix', 'compute', 'thermo', 'timestep', 'atom_style'],
-        'capabilities': ['molecular_dynamics', 'thermal_conductivity', 'structure_optimization']
+        'skills': ['molecular_dynamics', 'thermal_conductivity', 'structure_optimization']
     },
     'quantum_espresso': {
         'imports': ['espresso', 'qe', 'pwscf', 'ase.calculators.espresso'],
@@ -41,7 +41,7 @@ CODE_SIGNATURES = {
         'extensions': ['.in', '.out'],
         'classes': ['Espresso', 'PWscf'],
         'keywords': ['&control', '&system', '&electrons', 'ATOMIC_SPECIES', 'K_POINTS'],
-        'capabilities': ['dft_calculation', 'band_structure', 'phonon_calculation', 'structure_optimization']
+        'skills': ['dft_calculation', 'band_structure', 'phonon_calculation', 'structure_optimization']
     },
     'vasp': {
         'imports': ['vasp', 'pymatgen', 'ase.calculators.vasp'],
@@ -49,7 +49,7 @@ CODE_SIGNATURES = {
         'extensions': [],
         'classes': ['Vasp', 'VaspCalculator'],
         'keywords': ['ENCUT', 'ISMEAR', 'IBRION', 'NSW', 'PREC', 'ALGO'],
-        'capabilities': ['dft_calculation', 'structure_optimization', 'band_structure', 'dos_calculation']
+        'skills': ['dft_calculation', 'structure_optimization', 'band_structure', 'dos_calculation']
     },
     'ase': {
         'imports': ['ase', 'from ase', 'import ase'],
@@ -57,7 +57,7 @@ CODE_SIGNATURES = {
         'extensions': ['.traj', '.xyz'],
         'classes': ['Atoms', 'Calculator', 'Trajectory', 'FixAtoms'],
         'keywords': ['atoms', 'calculator', 'get_potential_energy', 'get_forces'],
-        'capabilities': ['structure_manipulation', 'calculator_interface', 'molecular_dynamics']
+        'skills': ['structure_manipulation', 'calculator_interface', 'molecular_dynamics']
     },
     'materials_project': {
         'imports': ['pymatgen', 'mp_api', 'materialsproject', 'MPRester'],
@@ -65,7 +65,7 @@ CODE_SIGNATURES = {
         'extensions': ['.json', '.yaml'],
         'classes': ['MPRester', 'Structure', 'ComputedEntry'],
         'keywords': ['mp-', 'band_gap', 'formation_energy', 'material_id'],
-        'capabilities': ['material_search', 'property_retrieval', 'structure_download']
+        'skills': ['material_search', 'property_retrieval', 'structure_download']
     },
     'cp2k': {
         'imports': ['cp2k', 'ase.calculators.cp2k'],
@@ -73,7 +73,7 @@ CODE_SIGNATURES = {
         'extensions': ['.inp'],
         'classes': ['CP2K'],
         'keywords': ['&GLOBAL', '&FORCE_EVAL', '&DFT', '&QS'],
-        'capabilities': ['dft_calculation', 'molecular_dynamics', 'monte_carlo']
+        'skills': ['dft_calculation', 'molecular_dynamics', 'monte_carlo']
     },
     'siesta': {
         'imports': ['siesta', 'ase.calculators.siesta'],
@@ -81,7 +81,7 @@ CODE_SIGNATURES = {
         'extensions': ['.fdf'],
         'classes': ['Siesta'],
         'keywords': ['SystemName', 'NumberOfAtoms', 'PAO.BasisSize', 'MeshCutoff'],
-        'capabilities': ['dft_calculation', 'structure_optimization', 'molecular_dynamics']
+        'skills': ['dft_calculation', 'structure_optimization', 'molecular_dynamics']
     }
 }
 
@@ -94,7 +94,6 @@ class CodePattern:
     parameters: Dict[str, Any]
     imports: List[str]
     description: str = ""
-    capability: str = ""
     code_snippet: str = ""
     input_files: List[str] = field(default_factory=list)
     output_files: List[str] = field(default_factory=list)
@@ -102,9 +101,8 @@ class CodePattern:
 
 @dataclass
 class MethodConfig:
-    """Configuration for a computational method"""
+    """Configuration for a computational method/skill"""
     description: str
-    capability: str
     required_parameters: List[str] = field(default_factory=list)  # Must be provided by user
     optional_parameters: List[str] = field(default_factory=list)   # Can be omitted by user
     parameter_types: Dict[str, str] = field(default_factory=dict)
@@ -322,8 +320,7 @@ class RepoScanner:
             skill_name='lammps_simulation',
             parameters={'commands': dict(commands)},
             imports=[],
-            description=f"LAMMPS input from {file_path.name}",
-            capability='molecular_dynamics'
+            description=f"LAMMPS input from {file_path.name}"
         )
         self.patterns.append(pattern)
 
@@ -340,20 +337,19 @@ class RepoScanner:
                 sections[current_section].append(line.strip())
 
         # Determine calculation type
-        capability = 'dft_calculation'
+        skill_name = 'qe_calculation'
         if '&phonon' in sections:
-            capability = 'phonon_calculation'
+            skill_name = 'qe_phonon_calculation'
         elif 'calculation' in str(sections):
             if 'bands' in str(sections).lower():
-                capability = 'band_structure'
+                skill_name = 'qe_band_structure'
 
         pattern = CodePattern(
             file_path=str(file_path),
-            skill_name='qe_calculation',
+            skill_name=skill_name,
             parameters={'sections': sections},
             imports=[],
-            description=f"QE input from {file_path.name}",
-            capability=capability
+            description=f"QE input from {file_path.name}"
         )
         self.patterns.append(pattern)
 
@@ -371,18 +367,17 @@ class RepoScanner:
                         parameters[key] = value
 
             # Determine calculation type
-            capability = 'dft_calculation'
+            skill_name = 'vasp_calculation'
             if 'IBRION' in parameters:
                 if parameters['IBRION'] in ['1', '2', '3']:
-                    capability = 'structure_optimization'
+                    skill_name = 'vasp_structure_optimization'
 
             pattern = CodePattern(
                 file_path=str(file_path),
-                skill_name='vasp_calculation',
+                skill_name=skill_name,
                 parameters=parameters,
                 imports=[],
-                description=f"VASP INCAR from {file_path.name}",
-                capability=capability
+                description=f"VASP INCAR from {file_path.name}"
             )
             self.patterns.append(pattern)
 
@@ -408,8 +403,7 @@ class RepoScanner:
             skill_name='cp2k_calculation',
             parameters={'sections': dict(sections)},
             imports=[],
-            description=f"CP2K input from {file_path.name}",
-            capability='dft_calculation'
+            description=f"CP2K input from {file_path.name}"
         )
         self.patterns.append(pattern)
 
@@ -549,9 +543,6 @@ class RepoScanner:
                     except:
                         parameters[keyword.arg] = str(ast.unparse(keyword.value))
 
-            # Determine capability
-            capability = self._infer_capability(skill_name, parameters)
-
             # Get code snippet
             try:
                 snippet = ast.unparse(node)
@@ -564,7 +555,6 @@ class RepoScanner:
                 parameters=parameters,
                 imports=imports,
                 description="",
-                capability=capability,
                 code_snippet=snippet
             )
 
@@ -602,69 +592,34 @@ class RepoScanner:
                         except:
                             parameters[key_str] = str(value)
 
-            # Determine capability
-            capability = self._infer_capability(parent, parameters)
-
             return CodePattern(
                 file_path=str(file_path),
                 skill_name=f"config_{parent}",
                 parameters=parameters,
                 imports=imports,
                 description="",
-                capability=capability,
                 code_snippet=str(parameters)
             )
 
         except Exception:
             return None
 
-    def _infer_capability(self, skill_name: str, parameters: Dict) -> str:
-        """Infer capability from method name and parameters"""
-        skill_lower = skill_name.lower()
-        param_str = str(parameters).lower()
-
-        # Check for specific capabilities
-        capability_mappings = {
-            'thermal_conductivity': ['thermal', 'conductivity', 'kappa', 'heat'],
-            'phonon_dispersion': ['phonon', 'dispersion', 'frequency', 'bands'],
-            'band_structure': ['band', 'bands', 'electronic'],
-            'dos_calculation': ['dos', 'density_of_states'],
-            'structure_optimization': ['optimize', 'relax', 'minimize'],
-            'molecular_dynamics': ['md', 'dynamics', 'nvt', 'npt', 'nve'],
-            'dft_calculation': ['scf', 'dft', 'electronic', 'energy'],
-            'force_constants': ['force', 'constant', 'hessian', 'dynamical'],
-            'anharmonic_properties': ['anharmonic', 'lifetime', 'linewidth']
-        }
-
-        for capability, keywords in capability_mappings.items():
-            for keyword in keywords:
-                if keyword in skill_lower or keyword in param_str:
-                    return capability
-
-        # Default based on code type
-        if self.code_name in CODE_SIGNATURES:
-            caps = CODE_SIGNATURES[self.code_name].get('capabilities', [])
-            if caps:
-                return caps[0]
-
-        return 'calculation'
-
     def analyze_with_llm(self):
         """Use LLM to understand the code patterns"""
         logger.info("Analyzing patterns with LLM...")
 
-        # Group patterns by capability
-        capability_groups = defaultdict(list)
+        # Group patterns by skill name
+        skill_groups = defaultdict(list)
         for pattern in self.patterns:
-            capability_groups[pattern.capability].append(pattern)
+            skill_groups[pattern.skill_name].append(pattern)
 
-        # Analyze each capability group
-        for capability, patterns in capability_groups.items():
+        # Analyze each skill group
+        for skill_name, patterns in skill_groups.items():
             if len(patterns) > 100:  # Limit to prevent excessive API calls
                 patterns = patterns[:100]
 
             # Prepare context for LLM
-            context = self._prepare_llm_context(capability, patterns[:10])
+            context = self._prepare_llm_context(skill_name, patterns[:10])
 
             # Get LLM analysis
             analysis = self._get_llm_analysis(context)
@@ -675,10 +630,10 @@ class RepoScanner:
                     if not pattern.description:
                         pattern.description = analysis.get('description', '')
 
-    def _prepare_llm_context(self, capability: str, patterns: List[CodePattern]) -> str:
+    def _prepare_llm_context(self, skill_name: str, patterns: List[CodePattern]) -> str:
         """Prepare context for LLM analysis"""
         context = f"""
-Analyze these {self.code_name} code patterns for the capability: {capability}
+Analyze these {self.code_name} code patterns for the skill: {skill_name}
 
 Examples found:
 """
@@ -693,7 +648,7 @@ Parameters: {json.dumps(pattern.parameters, indent=2)[:500]}
         context += f"""
 
 Based on these examples for {self.code_name}, determine:
-1. What is the purpose and description of this capability?
+1. What is the purpose and description of this skill?
 2. What are the typical required and optional parameters?
 3. Generate a brief input template
 
@@ -729,36 +684,32 @@ Respond in JSON format:
 
     def consolidate_skills(self):
         """Consolidate patterns into skills with proper parameter classification"""
-        # Group patterns by capability
-        capability_groups = defaultdict(list)
+        # Group patterns by skill name
+        skill_groups = defaultdict(list)
         for pattern in self.patterns:
-            if pattern.capability:
-                capability_groups[pattern.capability].append(pattern)
+            if pattern.skill_name:
+                skill_groups[pattern.skill_name].append(pattern)
 
-        # Create method configs for each capability
-        for capability, patterns in capability_groups.items():
+        # Create method configs for each skill
+        for skill_name, patterns in skill_groups.items():
             if not patterns:
                 continue
 
             # Analyze parameter usage across patterns
             param_analysis = self._analyze_parameters(patterns)
 
-            # Generate method name
-            skill_name = capability.replace('_', ' ').title().replace(' ', '_').lower()
-
             # Create method config
-            description = patterns[0].description if patterns and patterns[0].description else f"{capability} calculation"
+            description = patterns[0].description if patterns and patterns[0].description else f"{skill_name} calculation"
 
             skill_config = MethodConfig(
                 description=description,
-                capability=capability,
                 required_parameters=param_analysis['mandatory'][:10],
                 optional_parameters=param_analysis['optional'][:15],
                 parameter_types=param_analysis['types'],
                 default_parameters=param_analysis['defaults'],
-                input_template=self._generate_template(capability, param_analysis['mandatory'], param_analysis['optional']),
+                input_template=self._generate_template(skill_name, param_analysis['mandatory'], param_analysis['optional']),
                 script_template=self._generate_script_template(),
-                outputs=self._generate_outputs(capability),
+                outputs=self._generate_outputs(skill_name),
                 execution={'command': self._get_execution_command(), 'timeout': 3600}
             )
 
@@ -864,13 +815,13 @@ Respond in JSON format:
         else:
             return "any"
 
-    def _generate_template(self, capability: str, mandatory: List[str], optional: List[str]) -> List[str]:
+    def _generate_template(self, skill_name: str, mandatory: List[str], optional: List[str]) -> List[str]:
         """Generate input template based on code type"""
         template = []
 
         if self.code_name == 'kaldo':
             template = [
-                f"# {capability} calculation for {{material_id}}",
+                f"# {skill_name} calculation for {{material_id}}",
                 "from kaldo.forceconstants import ForceConstants",
                 "from kaldo.phonons import Phonons",
                 "",
@@ -887,7 +838,7 @@ Respond in JSON format:
         elif self.code_name == 'lammps':
             template = [
                 "# LAMMPS input for {material_id}",
-                "# {capability}",
+                f"# {skill_name}",
                 "",
                 "units metal",
                 "atom_style atomic",
@@ -941,7 +892,7 @@ Respond in JSON format:
         else:
             # Generic template
             template = [
-                f"# {self.code_name} {capability} calculation",
+                f"# {self.code_name} {skill_name} calculation",
                 "# Material: {material_id}",
                 "# Auto-generated template",
                 ""
@@ -964,18 +915,18 @@ Respond in JSON format:
         else:
             return "python run.py"
 
-    def _generate_outputs(self, capability: str) -> List[Dict[str, str]]:
+    def _generate_outputs(self, skill_name: str) -> List[Dict[str, str]]:
         """Generate output specifications"""
         outputs = []
 
-        if 'thermal_conductivity' in capability:
+        if 'thermal_conductivity' in skill_name:
             outputs.append({
                 "name": "thermal_conductivity",
                 "file": "thermal_conductivity.dat",
                 "type": "data"
             })
 
-        if 'phonon' in capability:
+        if 'phonon' in skill_name:
             outputs.append({
                 "name": "phonon_frequencies",
                 "file": "frequencies.dat",
@@ -987,14 +938,14 @@ Respond in JSON format:
                 "type": "data"
             })
 
-        if 'band' in capability:
+        if 'band' in skill_name:
             outputs.append({
                 "name": "band_structure",
                 "file": "bands.dat",
                 "type": "data"
             })
 
-        if 'structure' in capability:
+        if 'structure' in skill_name:
             outputs.append({
                 "name": "optimized_structure",
                 "file": "structure.out",
@@ -1051,7 +1002,6 @@ Respond in JSON format:
         for skill_name, skill_config in self.skills.items():
             config["skills"][skill_name] = {
                 "description": skill_config.description,
-                "capability": skill_config.capability,
                 "required_parameters": skill_config.required_parameters,
                 "optional_parameters": skill_config.optional_parameters,
                 "parameter_types": skill_config.parameter_types,
@@ -1061,10 +1011,6 @@ Respond in JSON format:
                 "outputs": skill_config.outputs,
                 "execution": skill_config.execution
             }
-
-        # Add code-specific information
-        if self.code_name in CODE_SIGNATURES:
-            config["supported_capabilities"] = CODE_SIGNATURES[self.code_name].get('capabilities', [])
 
         return config
 

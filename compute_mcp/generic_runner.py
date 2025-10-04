@@ -388,11 +388,6 @@ class GenericRunner:
         if skills:
             return list(skills.keys())[0]
 
-        # Fall back to capabilities
-        capabilities = config.get('capabilities', [])
-        if capabilities:
-            return capabilities[0]
-
         return 'default'
 
     def _evaluate_rule(self, condition: Dict, params: Dict) -> bool:

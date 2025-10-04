@@ -4,7 +4,6 @@
   "skills": {
     "phonon_dispersion": {
       "description": "phonon_dispersion calculation",
-      "capability": "phonon_dispersion",
       "required_parameters": [
         "forceconstants",
         "atoms"
@@ -107,7 +106,6 @@
     },
     "thermal_conductivity": {
       "description": "thermal_conductivity calculation",
-      "capability": "thermal_conductivity",
       "required_parameters": [
         "phonons",
         "method"
@@ -173,7 +171,6 @@
     },
     "force_constants": {
       "description": "force_constants calculation",
-      "capability": "force_constants",
       "required_parameters": [
         "atoms"
       ],
@@ -221,10 +218,5 @@
         "timeout": 3600
       }
     }
-  },
-  "supported_capabilities": [
-    "thermal_conductivity",
-    "phonon_dispersion",
-    "anharmonic_properties"
-  ]
+  }
 }

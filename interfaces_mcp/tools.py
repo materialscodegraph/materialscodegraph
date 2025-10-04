@@ -89,7 +89,7 @@ class InterfacesTools:
     def _create_workflow_plan(self, task: str, params: Dict) -> List[Dict]:
         """Use LLM to create a general workflow plan with any number of steps"""
 
-        # Get available tools and their capabilities
+        # Get available tools and their skills
         available_tools = self._get_available_tools()
 
         # Create prompt for LLM workflow planning
@@ -97,7 +97,7 @@ class InterfacesTools:
 Task: {task}
 Parameters extracted: {params}
 
-Available computational tools and their capabilities:
+Available computational tools and their skills:
 """
 
         for tool_name, tool_info in available_tools.items():
@@ -201,7 +201,7 @@ Workflow plan for the given task:"""
             }]
 
     def _get_available_tools(self) -> Dict:
-        """Get available tools and their capabilities from configs"""
+        """Get available tools and their skills from configs"""
         tools = {}
 
         for config_name, config in self.configs.items():
@@ -407,15 +407,15 @@ Example response format:
         best_method = None
         best_score = 0
 
-        for capability, spec in understands.items():
+        for skill, spec in understands.items():
             keywords = spec.get('keywords', [])
             aliases = spec.get('aliases', [])
-            all_terms = keywords + aliases + [capability]
+            all_terms = keywords + aliases + [skill]
 
             score = sum(1 for term in all_terms if term.lower() in task_lower)
             if score > best_score:
                 best_score = score
-                best_method = spec.get('method', capability)
+                best_method = spec.get('method', skill)
 
         return best_method
 

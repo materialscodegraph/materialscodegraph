@@ -230,7 +230,7 @@ Results include detailed thermal transport properties:
 
 ## Configuration
 
-MCG uses **JSON configuration files** in the `configs/` directory to define all computational tools and their capabilities. This enables perfect encapsulation - the core system has zero knowledge of specific simulation codes.
+MCG uses **JSON configuration files** in the `configs/` directory to define all computational tools and their skills. This enables perfect encapsulation - the core system has zero knowledge of specific simulation codes.
 
 ### Configuration Architecture
 

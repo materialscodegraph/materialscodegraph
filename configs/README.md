@@ -21,7 +21,6 @@ Each runner can support multiple computational skills:
 "skills": {
   "skill_name": {
     "description": "What this skill calculates",
-    "capability": "property_it_calculates",
     "required_parameters": ["param1", "param2"],
     "optional_parameters": ["param3", "param4"],
     "parameter_types": {
@@ -99,7 +98,7 @@ The system supports various parameter types:
 
 These configurations are used by the LLM-driven workflow planner to:
 
-1. **Understand capabilities**: What each runner can calculate
+1. **Understand skills**: What each runner can calculate
 2. **Extract parameters**: What parameters are needed from user input
 3. **Generate input files**: Create appropriate input scripts
 4. **Execute calculations**: Run with proper settings and timeouts

@@ -5,7 +5,6 @@
   "skills": {
     "green_kubo": {
       "description": "Green-Kubo method for thermal conductivity calculation",
-      "capability": "thermal_conductivity",
 
       "required_parameters": [
         "temperature",
@@ -141,7 +140,6 @@
 
     "nemd": {
       "description": "Non-equilibrium molecular dynamics for thermal conductivity",
-      "capability": "thermal_conductivity",
 
       "required_parameters": [
         "temperature",

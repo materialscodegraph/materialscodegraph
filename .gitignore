@@ -126,3 +126,11 @@ docs/_templates/
 # Container files
 Dockerfile.local
 docker-compose.override.yml
+.serena/.gitignore
+.serena/project.yml
+.serena/memories/code_style_and_conventions.md
+.serena/memories/design_patterns_and_guidelines.md
+.serena/memories/project_overview.md
+.serena/memories/suggested_commands.md
+.serena/memories/task_completion_checklist.md
+.serena/memories/tech_stack.md

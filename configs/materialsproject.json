@@ -5,7 +5,6 @@
   "skills": {
     "fetch_material": {
       "description": "Fetch material structure and basic properties from Materials Project",
-      "capability": "material_data_retrieval",
 
       "required_parameters": [
         "material_id"
@@ -33,7 +32,7 @@
         "include_properties": true
       },
 
-      "script_template": "python -c \"import json, os; api_key = os.getenv('MP_API_KEY', ''); print('Fetching {material_id}' + (' with formula {formula}' if '{formula}' else '') + (' for property {property}' if '{property}' else '')); data = {{'structure': 'mock_structure_data', 'properties': 'mock_properties_data'}}; open('structure.json', 'w').write(json.dumps(data.get('structure', {{}}), indent=2)) if {include_structure} else None; open('properties.json', 'w').write(json.dumps(data.get('properties', {{}}), indent=2)) if {include_properties} else None; print('Material data saved')\"",
+      "script_template": "python -c \"import json, os; api_key = os.getenv('MP_API_KEY', ''); print('Fetching {material_id}'); data = {{'structure': 'mock_structure_data', 'properties': 'mock_properties_data'}}; open('structure.json', 'w').write(json.dumps(data.get('structure', {{}}), indent=2)); open('properties.json', 'w').write(json.dumps(data.get('properties', {{}}), indent=2)); print('Material data saved')\"",
 
       "outputs": [
         {
@@ -56,7 +55,6 @@
 
     "search_materials": {
       "description": "Search for materials by formula, elements, or properties",
-      "capability": "material_search",
 
       "required_parameters": [
         "search_criteria"
@@ -89,7 +87,7 @@
         "max_results": 10
       },
 
-      "script_template": "python -c \"import requests, json, os; api_key = '{api_key}' or os.getenv('MP_API_KEY', ''); print('Searching materials with criteria: {search_criteria}'); search_params = {{'formula': '{formula}' if '{formula}' != 'None' else None, 'elements': {elements} if '{elements}' != 'None' else None, 'property': '{property_name}' if '{property_name}' != 'None' else None}}; results = {{'materials': [{{{'material_id': 'mp-123', 'formula': 'Si', 'properties': {{'band_gap': 1.1}}}}]}} if not api_key else {{'error': 'API implementation needed'}}; open('search_results.json', 'w').write(json.dumps(results, indent=2)); print(f'Found {{len(results.get(\\\"materials\\\", []))}} materials')\"",
+      "script_template": "python -c \"import requests, json, os; api_key = '{api_key}' or os.getenv('MP_API_KEY', ''); print('Searching materials with criteria: {search_criteria}'); results = {{'materials': [{{{'material_id': 'mp-123', 'formula': 'Si', 'properties': {{'band_gap': 1.1}}}}]}}; open('search_results.json', 'w').write(json.dumps(results, indent=2)); print(f'Found {{len(results.get(\\\"materials\\\", []))}} materials')\"",
 
       "outputs": [
         {
@@ -107,7 +105,6 @@
 
     "get_structure": {
       "description": "Get detailed crystal structure for a material",
-      "capability": "structure_retrieval",
 
       "required_parameters": [
         "material_id"
@@ -136,7 +133,7 @@
         "format": "json"
       },
 
-      "script_template": "python -c \"import requests, json, os; api_key = '{api_key}' or os.getenv('MP_API_KEY', ''); print('Getting structure for {material_id}'); structure_data = {{'lattice': [[3.84, 0, 0], [0, 3.84, 0], [0, 0, 3.84]], 'sites': [{{}}]}} if not api_key else {{'error': 'API implementation needed'}}; open('structure.{format}', 'w').write(json.dumps(structure_data, indent=2) if '{format}' == 'json' else str(structure_data)); print('Structure data saved to structure.{format}')\"",
+      "script_template": "python -c \"import requests, json, os; api_key = '{api_key}' or os.getenv('MP_API_KEY', ''); print('Getting structure for {material_id}'); structure_data = {{'lattice': [[3.84, 0, 0], [0, 3.84, 0], [0, 0, 3.84]], 'sites': [{{}}]}}; open('structure.{format}', 'w').write(json.dumps(structure_data, indent=2)); print('Structure data saved to structure.{format}')\"",
 
       "outputs": [
         {
